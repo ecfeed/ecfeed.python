@@ -73,7 +73,7 @@ class EcFeed:
             line = line.decode('utf-8')
             if 'template' in kwargs:
                 yield line
-            elif 'raw_output' in kwargs:
+            elif 'raw_output' in kwargs and kwargs['raw_output'] == True:
                 yield line
             else:
                 test_data = parse_test_line(line=line)
