@@ -54,9 +54,10 @@ class Context:
     def __del__(self):
         if os.path.isfile(self.cert_file_name):
             os.remove(self.cert_file_name)
-
         if os.path.isfile(self.pkey_file_name):
             os.remove(self.pkey_file_name)
+        if os.path.isfile(self.ca_file_name):
+            os.remove(self.ca_file_name)
 
 class EcFeed:
     def __init__(self, **kwargs):
