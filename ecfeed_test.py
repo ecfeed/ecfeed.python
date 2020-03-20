@@ -2,7 +2,7 @@ import pytest
 
 from ecfeed import EcFeed
 
-ecfeed = EcFeed(keystore='./security1.p12', model='0168-4412-8644-9433-6380', 
+ecfeed = EcFeed(keystore='./security.p12', model='0168-4412-8644-9433-6380', 
                 package='com.example.test', classname='TestClass1')
 
 
