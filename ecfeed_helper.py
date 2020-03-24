@@ -31,7 +31,7 @@ def prepare_request(method, data_source, gen_args, **kwargs):
     
     request_type='requestData'
     if template != None:
-        generate_params['template'] = template.name
+        generate_params['template'] = str(template)
         request_type='requestExport'
 
     request = 'https://' + gen_args['genserver'] + '/testCaseService?requestType=' + request_type + '&request='

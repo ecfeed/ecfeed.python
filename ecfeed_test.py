@@ -1,6 +1,6 @@
 import pytest
 
-from ecfeed import EcFeed
+from ecfeed import EcFeed, TemplateType
 
 ecfeed = EcFeed(keystore='./security.p12', model='0168-4412-8644-9433-6380', 
                 package='com.example.test', classname='TestClass1')
@@ -16,11 +16,12 @@ class TestEcFeed:
 
 # try:
 # context = Context(keystore='./security.p12')
-# ecfeed=EcFeed(keystore='./security1.p12', model='0168-4412-8644-9433-6380', 
+# ecfeed=EcFeed(keystore='./security.p12', model='0168-4412-8644-9433-6380', 
 #                   package='com.example.test', classname='TestClass1')
 
-# for line in ecfeed.random(method='testMethod1(int,int,int)', length=4, adaptive=True, duplicates=True):
-#     print(line)
+for line in ecfeed.nwise(method='testMethod1(int,int,int)', n=1, template='CSV'):
+# for line in ecfeed.nwise(method='testMethod1(int,int,int)', n=1, template=TemplateType.CSV):
+    print(line)
 # for line in ecfeed.static_suite(method='testMethod1(int,int,int)', test_suites=['default', 'cycki'], template=TemplateType.CSV):
 #     print(line)
 

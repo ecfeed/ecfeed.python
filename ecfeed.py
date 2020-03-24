@@ -16,6 +16,9 @@ class TemplateType(Enum):
     Gherkin = 3
     JSON = 4
 
+    def __str__(self):
+        return self.name
+
 class Context:
     def __init__(self, **kwargs):
         keystore_path=kwargs.pop('keystore', '~/.ecfeed/security.p12')
