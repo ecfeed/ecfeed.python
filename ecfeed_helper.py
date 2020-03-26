@@ -7,6 +7,9 @@ class DataSource(Enum):
     CARTESIAN = 2
     RANDOM = 3
 
+    def __repr__(self):
+        return self.to_url_param()
+
     def to_url_param(self):
         if self == DataSource.STATIC_DATA:
             return 'static'
@@ -17,30 +20,25 @@ class DataSource(Enum):
         if self == DataSource.RANDOM:
             return 'genRandom'
 
-def prepare_request(method, data_source, gen_args, **kwargs):
+def prepare_request(genserver, model, method, data_source, template=None, **user_data):
     generate_params={}
     generate_params['method'] = ''
-    if gen_args['package'] != None:
-        generate_params['method'] += gen_args['package'] + '.'
-    if gen_args['classname'] != None:
-        generate_params['method'] += gen_args['classname'] + '.' 
     generate_params['method'] += method
-    generate_params['model'] = gen_args['model']
-    generate_params['userData'] = serialize_user_data(data_source=data_source, **kwargs)
-    template=kwargs.pop('template', None)
+    generate_params['model'] = model
+    generate_params['userData'] = serialize_user_data(data_source=data_source, **user_data)
     
     request_type='requestData'
     if template != None:
         generate_params['template'] = str(template)
         request_type='requestExport'
 
-    request = 'https://' + gen_args['genserver'] + '/testCaseService?requestType=' + request_type + '&request='
+    request = 'https://' + genserver + '/testCaseService?requestType=' + request_type + '&request='
     request += json.dumps(generate_params).replace(' ', '')
     return request
 
 def serialize_user_data(data_source, **kwargs):
     user_data={}
-    user_data['dataSource']=data_source.to_url_param()
+    user_data['dataSource']=repr(data_source)
     test_suites=kwargs.pop('test_suites', None)
     properties=kwargs.pop('properties', None)
     constraints=kwargs.pop('constraints', None)
@@ -67,26 +65,6 @@ def parse_method_definition(method_info_line):
     for arg in method_args.split(','):
         args.append(arg.strip().split(' '))
     result['args'] = args
-    return result
-
-def parse_test_line(line):
-    result = {}
-    try:
-        parsed_line = json.loads(line)
-    except ValueError as e:
-        print('Unexpected error while parsing line: "' + line + '": ' + str(e))
-    if 'info'  in parsed_line:
-        info = parsed_line['info'].replace('\'', '"')
-        try:
-            result['method'] = parse_method_definition(json.loads(info)['method'])
-        except (ValueError, KeyError) as e:
-            pass
-    elif 'testCase' in parsed_line:
-        try:
-            result['values'] = [arg['value'] for arg in parsed_line['testCase']]
-        except ValueError as e:
-            print('Unexpected error when parsing test case line: "' + line + '": ' + str(e))
-
     return result
 
 def cast(arg_info):
