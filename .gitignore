@@ -2,4 +2,5 @@
 *.cert
 *.pkey
 *.ca
+__pycache__/*
 
