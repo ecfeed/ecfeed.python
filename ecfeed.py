@@ -5,8 +5,6 @@ from OpenSSL import crypto
 import json
 from enum import Enum
 
-from ecfeed_helper import *
-
 class EcFeedError(Exception):
     pass
 
@@ -22,6 +20,26 @@ class TemplateType(Enum):
     def __str__(self):
         return self.name
 
+class DataSource(Enum):
+    STATIC_DATA = 0
+    NWISE = 1
+    CARTESIAN = 2
+    RANDOM = 3
+
+    def __repr__(self):
+        return self.to_url_param()
+
+    def to_url_param(self):
+        if self == DataSource.STATIC_DATA:
+            return 'static'
+        if self == DataSource.NWISE:
+            return 'genNWise'
+        if self == DataSource.CARTESIAN:
+            return 'genCartesian'
+        if self == DataSource.RANDOM:
+            return 'genRandom'
+
+
 class Context:
     """Contains parameters constant during lifetime of EcFeed class objects.
 
@@ -31,10 +49,13 @@ class Context:
     ----------
     genserver : str
         url of the ecFeed generator service
+
     cert_file_name : str
         path to created user certificate file 
+
     pkey_file_name : str
         path to created user private key file 
+
     ca_file_name : str
         path to created server certificate file 
     """
@@ -45,8 +66,10 @@ class Context:
         ----------
         genserver : str
             url to ecFeed generator service (default is 'develop-gen.ecfeed.com')
+
         keystore_path : str
             path to keystore file with user and server certificates (default is '~/.ecfeed.security.p12')
+
         password : str
             password to keystore (default is 'changeit')
 
@@ -87,11 +110,11 @@ class Context:
         """Remove all temporary files derived from the keystore
         """
 
-        if os.path.isfile(self.cert_file_name):
+        if self.cert_file_name != None and os.path.isfile(self.cert_file_name):
             os.remove(self.cert_file_name)
-        if os.path.isfile(self.pkey_file_name):
+        if self.pkey_file_name != None and os.path.isfile(self.pkey_file_name):
             os.remove(self.pkey_file_name)
-        if os.path.isfile(self.ca_file_name):
+        if self.ca_file_name != None and os.path.isfile(self.ca_file_name):
             os.remove(self.ca_file_name)
 
 class EcFeed:
@@ -115,10 +138,13 @@ class EcFeed:
         ----------
         genserver : str
             url to ecFeed generator service (default is 'develop-gen.ecfeed.com')
+
         keystore_path : str
             path to keystore file with user and server certificates (default is '~/.ecfeed.security.p12')
+
         password : str
             password to keystore (default is 'changeit')
+
         model : str
             id of the default model used by generators
 
@@ -127,7 +153,7 @@ class EcFeed:
         self.model = model
         self.__context = Context(genserver=genserver, keystore_path=keystore_path, password=password)
 
-    def generate(self, method, data_source, model=None, template=None, **user_data):
+    def generate(self, method, data_source, model=None, template=None, request_only=False, **user_data):
         """Generic call to ecfeed generator service
 
         Parameters
@@ -170,7 +196,7 @@ class EcFeed:
 
         Returns
         -------
-            if a template was not provided, the function yields tuples of values casted
+            If a template was not provided, the function yields tuples of values casted
             to types defined by the signature of the function used for the generation. 
             If a template was provided, the function yields lines of the exported data
             according to the template 
@@ -179,10 +205,10 @@ class EcFeed:
         if model == None:
             model = self.model
 
-        request = prepare_request(genserver=self.__context.genserver, 
-                                  model=model, method=method, 
-                                  data_source=data_source, template=template, 
-                                  **user_data)
+        request = self.__prepare_request(genserver=self.__context.genserver, 
+                            model=model, method=method, 
+                            data_source=data_source, template=template, 
+                            **user_data)
         # response = requests.get(request, verify=self.context.ca_file_name, cert=(self.context.cert_file_name, self.context.pkey_file_name), stream=True)
         response = requests.get(request, verify=False, cert=(self.__context.cert_file_name, self.__context.pkey_file_name), stream=True)
 
@@ -198,7 +224,7 @@ class EcFeed:
                 if 'method' in test_data:
                     args_info = test_data['method']   
                 if 'values' in test_data:
-                    yield  [cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
+                    yield  [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
 
     def nwise(self, method, n, coverage=100, template=None, **user_data):
         """A convenient way to call nwise generator. 
@@ -207,18 +233,25 @@ class EcFeed:
         ----------
         method : str
             See 'generate'
+
         n : int
             The 'N' in NWise
+
         coverage : int
             The percent of N-tuples that the generator will try to cover. 
+
         template : str
             See 'generate'            
+
         choices : dictionary
             See 'generate'                         
+
         constraints : dictionary
             See 'generate'                         
+
         model : str
             See 'generate'                         
+
         """
 
         properties={}
@@ -234,14 +267,19 @@ class EcFeed:
         ----------
         method : str
             See 'generate'
+            
         coverage : int
             See 'nwise' 
+
         template : str
             See 'generate'            
+
         choices : dictionary
             See 'generate' 
+
         constraints : dictionary
             See 'generate' 
+
         model : str
             See 'generate'                         
         """
@@ -255,14 +293,19 @@ class EcFeed:
         ----------
         method : str
             See 'generate'
+
         template : str
             See 'generate'            
+
         choices : dictionary
             See 'generate' 
+
         constraints : dictionary
             See 'generate' 
+
         model : str
             See 'generate'                         
+
         """
 
         yield from self.generate(method=method, data_source=DataSource.CARTESIAN, template=template, **user_data)
@@ -274,17 +317,23 @@ class EcFeed:
         ----------
         method : str
             See 'generate'        
+
         length : int
             Number of test cases to generate
+
         adaptive : boolean
             If set to True, the generator will try to maximize the Hamming distance
             of each generate test case from already generated tests
+
         template : str
             See 'generate'            
+
         choices : dictionary
             See 'generate' 
+
         constraints : dictionary
             See 'generate' 
+
         model : str
             See 'generate'                         
         """
@@ -303,15 +352,17 @@ class EcFeed:
         ----------
         method : str
             See 'generate'        
+
         test_suites : list
             A list of test suites that shall be requested
+
         model : str
             See 'generate'                         
+
         """
 
         user_data['test_suites'] = test_suites
         yield from self.generate(method=method, data_source=DataSource.STATIC_DATA, template=template, **user_data)
-
 
     def method_info(self, method, model=None):
         """Queries generator service for information about the method
@@ -320,6 +371,7 @@ class EcFeed:
         ----------
         method : str
             Querried method        
+
         model : str
             Model id of the model where the method is defined
 
@@ -341,7 +393,7 @@ class EcFeed:
                 print('Unexpected problem when getting method info: ' + str(e))
             if 'info' in parsed :
                 method_name = parsed['info']['method']
-                info = parse_method_definition(method_name)
+                info = self.__parse_method_definition(method_name)
         return info
  
     def method_arg_names(self, method_info=None, method_name=None):
@@ -351,6 +403,7 @@ class EcFeed:
         ----------
         method_info : dict
             If provided, the method parses this dictionary for names of the methid arguments
+
         method_name : str
             If method_info not provided, this function first calls method_info(method_name), 
             and then recursively calls itself with the result
@@ -372,6 +425,7 @@ class EcFeed:
         ----------
         method_info : dict
             If provided, the method parses this dictionary for names of the methid arguments
+
         method_name : str
             If method_info not provided, this function first calls method_info(method_name), 
             and then recursively calls itself with the result
@@ -386,6 +440,31 @@ class EcFeed:
         elif method_name != None:
             return self.method_arg_types(self.method_info(method=method_name))
 
+    def __prepare_request(self, method, data_source, 
+                          genserver=None, 
+                          model=None,
+                          template=None, **user_data) -> str:
+                          
+        if genserver == None:
+            genserver = self.__context.genserver
+        if model == None:
+            model = self.__context.model
+
+        generate_params={}
+        generate_params['method'] = ''
+        generate_params['method'] += method
+        generate_params['model'] = model
+        generate_params['userData'] = self.__serialize_user_data(data_source=data_source, **user_data)
+        
+        request_type='requestData'
+        if template != None:
+            generate_params['template'] = str(template)
+            request_type='requestExport'
+
+        request = 'https://' + genserver + '/testCaseService?requestType=' + request_type + '&request='
+        request += json.dumps(generate_params).replace(' ', '')
+        return request
+
     def __parse_test_line(self, line):
         result = {}
         try:
@@ -395,7 +474,7 @@ class EcFeed:
         if 'info'  in parsed_line:
             info = parsed_line['info'].replace('\'', '"')
             try:
-                result['method'] = parse_method_definition(json.loads(info)['method'])
+                result['method'] = self.__parse_method_definition(json.loads(info)['method'])
             except (ValueError, KeyError) as e:
                 pass
         elif 'testCase' in parsed_line:
@@ -405,5 +484,51 @@ class EcFeed:
                 print('Unexpected error when parsing test case line: "' + line + '": ' + str(e))
 
         return result
+
+    def __serialize_user_data(self, data_source, **kwargs):
+        user_data={}
+        user_data['dataSource']=repr(data_source)
+        test_suites=kwargs.pop('test_suites', None)
+        properties=kwargs.pop('properties', None)
+        constraints=kwargs.pop('constraints', None)
+        choices=kwargs.pop('choices', None)
+        if test_suites != None:
+            user_data['testSuites']=test_suites
+        if properties != None:
+            user_data['properties']=properties
+        if constraints != None:
+            user_data['constraints']=constraints
+        if choices != None:
+            user_data['choices']=choices
+        return json.dumps(user_data).replace(' ', '').replace('"', '\'')
+
+    def __parse_method_definition(self, method_info_line):
+        result={}
+        full_method_name = method_info_line[0:method_info_line.find('(')]
+        method_args = method_info_line[method_info_line.find('(')+1:-1]
+        full_class_name = full_method_name[0:full_method_name.rfind('.')]
+        result['package_name'] = full_class_name[0:full_class_name.rfind('.')]
+        result['class_name'] = full_class_name[full_class_name.rfind('.')+1:-1]
+        result['method_name'] = full_method_name[full_method_name.rfind('.')+1:-1]
+        args=[]
+        for arg in method_args.split(','):
+            args.append(arg.strip().split(' '))
+        result['args'] = args
+        return result
+
+    def __cast(self, arg_info):
+        value = arg_info[0]
+        typename = arg_info[1]
+
+        if typename in ['byte, short', 'int', 'long']:
+            return int(value)
+        elif typename in ['float', 'double']:
+            return float(value)
+        elif typename in ['String', 'char']:
+            return value
+        elif typename in ['booolean']:
+            return value.lower in ['true', '1']
+
+
 
 
