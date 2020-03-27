@@ -1,4 +1,4 @@
-import os
+from os import path, remove
 import requests
 from OpenSSL import crypto
 
@@ -80,13 +80,13 @@ class Context:
         """
 
         self.genserver = genserver
-        filename, extension = os.path.splitext(os.path.basename(keystore_path))
+        filename, extension = path.splitext(path.basename(keystore_path))
         extension = extension[1:len(extension)]
         self.cert_file_name = '__temp_' + filename + '.cert'
         self.pkey_file_name = '__temp_' + filename + '.pkey'
         self.ca_file_name = '__temp_' + filename + '.ca'
 
-        if os.path.isfile(keystore_path) == False:
+        if path.isfile(keystore_path) == False:
             raise EcFeedError('keystore file ' + keystore_path + ' does not exist')
 
         keystore = crypto.load_pkcs12(open(keystore_path, 'rb').read(), password.encode('utf8'))
@@ -109,13 +109,18 @@ class Context:
     def __del__(self):
         """Remove all temporary files derived from the keystore
         """
-
-        if self.cert_file_name != None and os.path.isfile(self.cert_file_name):
-            os.remove(self.cert_file_name)
-        if self.pkey_file_name != None and os.path.isfile(self.pkey_file_name):
-            os.remove(self.pkey_file_name)
-        if self.ca_file_name != None and os.path.isfile(self.ca_file_name):
-            os.remove(self.ca_file_name)
+        try:
+            remove(self.cert_file_name)
+        except OSError:
+            pass
+        try:
+            remove(self.pkey_file_name)
+        except OSError:
+            pass
+        try:
+            remove(self.ca_file_name)
+        except OSError:
+            pass
 
 class EcFeed:
     '''Access provider to ecFeed remote generator services
@@ -209,7 +214,7 @@ class EcFeed:
                             model=model, method=method, 
                             data_source=data_source, template=template, 
                             **user_data)
-        # response = requests.get(request, verify=self.context.ca_file_name, cert=(self.context.cert_file_name, self.context.pkey_file_name), stream=True)
+        # response = requests.get(request, verify=self.__context.ca_file_name, cert=(self.__context.cert_file_name, self.__context.pkey_file_name), stream=True)
         response = requests.get(request, verify=False, cert=(self.__context.cert_file_name, self.__context.pkey_file_name), stream=True)
 
         args_info = {}

@@ -7,9 +7,8 @@ ecfeed = EcFeed(keystore_path='./security.p12', model='0168-4412-8644-9433-6380'
 
 
 class TestEcFeed:
-    pass
 
-    @pytest.mark.parametrize(ecfeed.method_arg_names(method_name='com.example.test.TestClass1.testMethod1(int,int,int)'), ecfeed.random('testMethod1(int,int,int)', length=5))
+    @pytest.mark.parametrize(ecfeed.method_arg_names(method_name='com.example.test.TestClass1.testMethod1(int,int,int)'), ecfeed.random('com.example.test.TestClass1.testMethod1(int,int,int)', length=5))
     def test_args(self, arg1, arg2, arg3):
         print('test_args(' + str(arg1) + ' ' + str(arg2) + ' ' + str(arg3) + ')')
 
@@ -18,7 +17,11 @@ class TestEcFeed:
 # ecfeed=EcFeed(keystore='./security.p12', model='0168-4412-8644-9433-6380', 
 #                   package='com.example.test', classname='TestClass1')
 
-for line in ecfeed.nwise(method='com.example.test.TestClass1.testMethod1(int,int,int)', n=1, template='CSV'):
+
+# for line in ecfeed.nwise(method='com.example.test.TestClass1.testMethod1(int,int,int)', n=1, template='CSV'):
+#     print(line)
+
+for line in ecfeed.random('com.example.test.TestClass1.testMethod1(int,int,int)', length=5):
     print(line)
 
 # for line in ecfeed.static_suite(method='testMethod1(int,int,int)', test_suites=['default', 'cycki'], template=TemplateType.CSV):
