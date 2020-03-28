@@ -1,6 +1,7 @@
 import argparse
 from ecfeed import EcFeed, DataSource, TemplateType
 import sys
+import os
 
 def main():
     args = parse_arguments()
@@ -27,9 +28,6 @@ def main():
     else:
         sys.stderr.write('Unknown data generator: ' + str(args['data_source']))
 
-
-
-
 def parse_arguments():
     parser = argparse.ArgumentParser(prog='ecfeed', description='command line utility to access ecFeec remote test generation service')    
 
@@ -38,7 +36,7 @@ def parse_arguments():
     required_args.add_argument('--method', dest='method', action='store', help='Full name of the method used for generation tests. If the model contains only one methd with this name, the argument types may be skipped. For example "--method com.test.TestClass.testMethod", or "--method com.test.TestClass.TestMethod(int, String)"', required=True)
 
     connection_args = parser.add_argument_group('Connection arguments', 'Arguments related to connection and authorization to ecFeed server. In most cases the default options will be fine.')
-    connection_args.add_argument('--keystore', dest='keystore', action='store', help='Path of the keystore file. Default is ~/.ecfeed.security.p12', default='~/.ecfeed.security.p12')
+    connection_args.add_argument('--keystore', dest='keystore', action='store', help='Path of the keystore file. Default is ~/.ecfeed/security.p12', default=os.path.expanduser('~/.ecfeed/security.p12'))
     connection_args.add_argument('--password', dest='password', action='store', help='Password to keystore. Default is "changeit"', default='changeit')
     connection_args.add_argument('--genserver', dest='genserver', action='store', help='Address of the ecfeed service. Default is "develop-gen.ecfeed.com"', default='develop-gen.ecfeed.com')
 

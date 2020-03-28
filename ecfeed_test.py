@@ -9,7 +9,7 @@ ecfeed = EcFeed(keystore_path='./security.p12', model='0168-4412-8644-9433-6380'
 #     print(line)
 
 #### PAIRWISE ####
-# for line in ecfeed.pairwise('TestClass.method', template=TemplateType.XML):
+# for line in ecfeed.pairwise('TestClass.method', template=TemplateType.XML, coverage=30):
 #     print(line)
 
 #### CARTESIAN ####
