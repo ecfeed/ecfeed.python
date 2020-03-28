@@ -199,12 +199,17 @@ class EcFeed:
             List of constraints used for the generation. If not provided, all constraints 
             will be used
 
-        Returns
+        Yields
         -------
             If a template was not provided, the function yields tuples of values casted
             to types defined by the signature of the function used for the generation. 
             If a template was provided, the function yields lines of the exported data
             according to the template 
+
+        Raises
+        ------
+        EcFeedError
+            If the generator service resposes with error
         """
 
         if model == None:
@@ -214,22 +219,28 @@ class EcFeed:
                             model=model, method=method, 
                             data_source=data_source, template=template, 
                             **user_data)
-        # response = requests.get(request, verify=self.__context.ca_file_name, cert=(self.__context.cert_file_name, self.__context.pkey_file_name), stream=True)
-        response = requests.get(request, verify=False, cert=(self.__context.cert_file_name, self.__context.pkey_file_name), stream=True)
+        response = requests.get(request, verify=self.__context.ca_file_name, cert=(self.__context.cert_file_name, self.__context.pkey_file_name), stream=True)
+        # response = requests.get(request, verify=False, cert=(self.__context.cert_file_name, self.__context.pkey_file_name), stream=True)
 
-        args_info = {}
-        for line in response.iter_lines(decode_unicode=True):
-            line = line.decode('utf-8')
-            if template != None:
-                yield line
-            elif 'raw_output' in user_data and user_data['raw_output'] == True:
-                yield line
-            else:
-                test_data = self.__parse_test_line(line=line)
-                if 'method' in test_data:
-                    args_info = test_data['method']   
-                if 'values' in test_data:
-                    yield  [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
+        if(response.status_code != 200):
+            print('Error: ' + str(response.status_code))
+            # for line in response.content:
+            #     print(line.decode('utf-8'))
+            raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
+        else:
+            args_info = {}
+            for line in response.iter_lines(decode_unicode=True):
+                line = line.decode('utf-8')
+                if template != None:
+                    yield line
+                elif 'raw_output' in user_data and user_data['raw_output'] == True:
+                    yield line
+                else:
+                    test_data = self.__parse_test_line(line=line)
+                    if 'method' in test_data:
+                        args_info = test_data['method']
+                    if 'values' in test_data:
+                        yield  [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
 
     def nwise(self, method, n, coverage=100, template=None, **user_data):
         """A convenient way to call nwise generator. 
