@@ -224,8 +224,6 @@ class EcFeed:
 
         if(response.status_code != 200):
             print('Error: ' + str(response.status_code))
-            # for line in response.content:
-            #     print(line.decode('utf-8'))
             raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
         else:
             args_info = {}
@@ -361,7 +359,7 @@ class EcFeed:
         user_data['properties'] = properties
         yield from self.generate(method=method, data_source=DataSource.RANDOM, template=template, **user_data)
 
-    def static_suite(self, method, test_suites, template=None, **user_data):
+    def static_suite(self, method, test_suites=None, template=None, **user_data):
         """Calls generator service for pre-generated data from test suites
 
         Parameters
