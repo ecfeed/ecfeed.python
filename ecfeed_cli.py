@@ -9,20 +9,21 @@ def main():
     if args['output'] != None:
         sys.stdout = open(args['output'], 'w')
 
-    if(args['data_source'] == DataSource.NWISE):
+    if args['data_source'] == DataSource.NWISE:
         for line in ecfeed.nwise(method=args['method'], n=args['n'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
             print(line)
-    elif(args['data_source'] == 'pairwise'):
+    elif args['data_source'] == 'pairwise':
         for line in ecfeed.pairwise(method=args['method'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
             print(line)
-    elif(args['data_source'] == DataSource.CARTESIAN):
+    elif args['data_source'] == DataSource.CARTESIAN:
         for line in ecfeed.cartesian(method=args['method'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
             print(line)
-    elif(args['data_source'] == DataSource.RANDOM):
+    elif args['data_source'] == DataSource.RANDOM:
         for line in ecfeed.random(method=args['method'], length=args['length'], adaptive=args['adaptive'], duplicates=args['duplicates'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
             print(line)
-    elif(args['data_source'] == DataSource.STATIC_DATA):
+    elif args['data_source'] == DataSource.STATIC_DATA:
         for line in ecfeed.static_suite(method=args['method'], length=args['length'], test_suites=args['suites'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
+            print(line)
     else:
         sys.stderr.write('Unknown data generator: ' + str(args['data_source']))
 
