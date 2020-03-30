@@ -2,6 +2,7 @@ import argparse
 from ecfeed import EcFeed, DataSource, TemplateType
 import sys
 import os
+import json
 
 def main():
     args = parse_arguments()
@@ -23,7 +24,7 @@ def main():
         for line in ecfeed.random(method=args['method'], length=args['length'], adaptive=args['adaptive'], duplicates=args['duplicates'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
             print(line)
     elif args['data_source'] == DataSource.STATIC_DATA:
-        for line in ecfeed.static_suite(method=args['method'], length=args['length'], test_suites=args['suites'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
+        for line in ecfeed.static_suite(method=args['method'], length=args['length'], test_suites=args['suites'], template=args['template']):
             print(line)
     else:
         sys.stderr.write('Unknown data generator: ' + str(args['data_source']))
@@ -77,7 +78,7 @@ def parse_arguments():
     random_group.add_argument('--adaptive', action='store_true', dest='adaptive', help='If used, the generator will try to generate tests that are furthest possible from already generated once (in Hamming distance)')
 
     static_group = parser.add_argument_group('Static data arguments', 'These arguments are valid only with --static option')
-    static_group.add_argument('--suites', action='store_true', dest='suites', help='list of test suites that will be fetched from the ecFeed service. If skipped, all test suites will be fetched')
+    static_group.add_argument('--suites', action='store', dest='suites', help='list of test suites that will be fetched from the ecFeed service. If skipped, all test suites will be fetched')
 
     other_arguments = parser.add_argument_group('Other optional arguments', 'These arguments are valid with all or only some data sources')
     other_arguments.add_argument('--template', dest='template', action='store', help='format for generated data. If not used, the data will be generated in CSV format', choices=[v.name for v in TemplateType], default=TemplateType.CSV)
@@ -98,6 +99,13 @@ def parse_arguments():
     #     print('--length, --duplicates and --adaptive options are valid only for --random, --pairwise or --random generator')
     # if 'suites' in args and 'suites' not in args:
     #     print('--length, --duplicates and --adaptive options are valid only for --random, --pairwise or --random generator')
+
+    if 'choices' in args and args['choices'] != None: 
+        args['choices'] = json.loads(args['choices'].replace('\'', '"'))
+    if 'constraints' in args and args['constraints'] != None:
+        args['constraints'] = json.loads(args['constraints'].replace('\'', '"'))
+    if 'suites' in args and args['suites'] != None:
+        args['suites'] = json.loads(args['suites'].replace('\'', '"'))
 
     return args
 
