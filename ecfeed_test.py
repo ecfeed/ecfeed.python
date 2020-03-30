@@ -1,7 +1,7 @@
 import pytest
 from ecfeed import EcFeed, TemplateType, DataSource
 
-ecfeed = EcFeed(keystore_path='./security.p12', model='0168-4412-8644-9433-6380')
+ecfeed = EcFeed(model='0168-4412-8644-9433-6380')
 
 #### access to generators in python code
 #### NWISE ####
