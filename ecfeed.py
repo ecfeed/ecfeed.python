@@ -60,7 +60,7 @@ class Context:
         path to created server certificate file 
     """
 
-    def __init__(self, genserver, keystore_path, password):
+    def __init__(self, genserver, keystore_path=path.expanduser('~/.ecfeed/security.p12'), password='changeit'):
         """
         Parameters
         ----------
@@ -136,7 +136,7 @@ class EcFeed:
     model = ''
 
     def __init__(self, genserver = 'develop-gen.ecfeed.com', 
-                 keystore_path='~/.ecfeed/security.p12', password='changeit',
+                 keystore_path=path.expanduser('~/.ecfeed/security.p12'), password='changeit',
                  model=None):
         '''
         Parameters
