@@ -89,7 +89,8 @@ class Context:
         if path.isfile(keystore_path) == False:
             raise EcFeedError('keystore file ' + keystore_path + ' does not exist')
 
-        keystore = crypto.load_pkcs12(open(keystore_path, 'rb').read(), password.encode('utf8'))
+        with open(keystore_path, 'rb') as keystore_file:
+            keystore = crypto.load_pkcs12(keystore_file.read(), password.encode('utf8'))
         key = crypto.dump_privatekey(crypto.FILETYPE_PEM, keystore.get_privatekey())      
         cert = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_certificate())
         ca = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_ca_certificates()[0])
@@ -105,6 +106,8 @@ class Context:
         with open('./' + self.ca_file_name, 'wb') as castream:
             castream.write(ca)
             castream.close()
+
+        
 
     def __del__(self):
         """Remove all temporary files derived from the keystore
