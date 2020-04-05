@@ -1,6 +1,8 @@
 from os import path, remove
+
 import requests
 from OpenSSL import crypto
+import tempfile
 
 import json
 from enum import Enum
@@ -39,92 +41,6 @@ class DataSource(Enum):
         if self == DataSource.RANDOM:
             return 'genRandom'
 
-
-class Context:
-    """Contains parameters constant during lifetime of EcFeed class objects.
-
-    ...
-
-    Attributes
-    ----------
-    genserver : str
-        url of the ecFeed generator service
-
-    cert_file_name : str
-        path to created user certificate file 
-
-    pkey_file_name : str
-        path to created user private key file 
-
-    ca_file_name : str
-        path to created server certificate file 
-    """
-
-    def __init__(self, genserver, keystore_path=path.expanduser('~/.ecfeed/security.p12'), password='changeit'):
-        """
-        Parameters
-        ----------
-        genserver : str
-            url to ecFeed generator service (default is 'develop-gen.ecfeed.com')
-
-        keystore_path : str
-            path to keystore file with user and server certificates (default is '~/.ecfeed.security.p12')
-
-        password : str
-            password to keystore (default is 'changeit')
-
-        Raises
-        ------
-        EcFeedError
-            If a problem occured during opening the keystore
-        """
-
-        self.genserver = genserver
-        filename, extension = path.splitext(path.basename(keystore_path))
-        extension = extension[1:len(extension)]
-        self.cert_file_name = '__temp_' + filename + '.cert'
-        self.pkey_file_name = '__temp_' + filename + '.pkey'
-        self.ca_file_name = '__temp_' + filename + '.ca'
-
-        if path.isfile(keystore_path) == False:
-            raise EcFeedError('keystore file ' + keystore_path + ' does not exist')
-
-        with open(keystore_path, 'rb') as keystore_file:
-            keystore = crypto.load_pkcs12(keystore_file.read(), password.encode('utf8'))
-        key = crypto.dump_privatekey(crypto.FILETYPE_PEM, keystore.get_privatekey())      
-        cert = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_certificate())
-        ca = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_ca_certificates()[0])
-
-        with open('./' + self.pkey_file_name, 'wb') as pkeystream:
-            pkeystream.write(key)
-            pkeystream.close()
-
-        with open('./' + self.cert_file_name, 'wb') as certstream:
-            certstream.write(cert)
-            certstream.close()
-
-        with open('./' + self.ca_file_name, 'wb') as castream:
-            castream.write(ca)
-            castream.close()
-
-        
-
-    def __del__(self):
-        """Remove all temporary files derived from the keystore
-        """
-        try:
-            remove(self.cert_file_name)
-        except OSError:
-            pass
-        try:
-            remove(self.pkey_file_name)
-        except OSError:
-            pass
-        try:
-            remove(self.ca_file_name)
-        except OSError:
-            pass
-
 class EcFeed:
     '''Access provider to ecFeed remote generator services
 
@@ -158,8 +74,10 @@ class EcFeed:
 
         '''
         
+        self.genserver = genserver
         self.model = model
-        self.__context = Context(genserver=genserver, keystore_path=keystore_path, password=password)
+        self.keystore_path = keystore_path
+        self.password = password
 
     def generate(self, method, data_source, model=None, template=None, request_only=False, **user_data):
         """Generic call to ecfeed generator service
@@ -218,30 +136,49 @@ class EcFeed:
         if model == None:
             model = self.model
 
-        request = self.__prepare_request(genserver=self.__context.genserver, 
+        request = self.__prepare_request(genserver=self.genserver, 
                             model=model, method=method, 
                             data_source=data_source, template=template, 
                             **user_data)
-        response = requests.get(request, verify=self.__context.ca_file_name, cert=(self.__context.cert_file_name, self.__context.pkey_file_name), stream=True)
-        # response = requests.get(request, verify=False, cert=(self.__context.cert_file_name, self.__context.pkey_file_name), stream=True)
 
-        if(response.status_code != 200):
-            print('Error: ' + str(response.status_code))
-            raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
-        else:
-            args_info = {}
-            for line in response.iter_lines(decode_unicode=True):
-                line = line.decode('utf-8')
-                if template != None:
-                    yield line
-                elif 'raw_output' in user_data and user_data['raw_output'] == True:
-                    yield line
-                else:
-                    test_data = self.__parse_test_line(line=line)
-                    if 'method' in test_data:
-                        args_info = test_data['method']
-                    if 'values' in test_data:
-                        yield  [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
+        with open(self.keystore_path, 'rb') as keystore_file:
+            keystore = crypto.load_pkcs12(keystore_file.read(), self.password.encode('utf8'))
+
+        key = crypto.dump_privatekey(crypto.FILETYPE_PEM, keystore.get_privatekey())      
+        cert = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_certificate())
+        ca = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_ca_certificates()[0])
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_cert_file: 
+            temp_cert_file.write(cert)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_pkey_file: 
+            temp_pkey_file.write(key)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_ca_file:
+            temp_ca_file.write(ca)
+
+        try:
+            response = requests.get(request, verify=temp_ca_file.name, cert=(temp_cert_file.name, temp_pkey_file.name), stream=True)
+            if(response.status_code != 200):
+                print('Error: ' + str(response.status_code))
+                raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
+            else:
+                args_info = {}
+                for line in response.iter_lines(decode_unicode=True):
+                    line = line.decode('utf-8')
+                    if template != None:
+                        yield line
+                    elif 'raw_output' in user_data and user_data['raw_output'] == True:
+                        yield line
+                    else:
+                        test_data = self.__parse_test_line(line=line)
+                        if 'method' in test_data:
+                            args_info = test_data['method']
+                        if 'values' in test_data:
+                            yield  [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
+
+        finally:
+            remove(temp_cert_file.name)
+            remove(temp_pkey_file.name)
+            remove(temp_ca_file.name)
 
     def nwise(self, method, n, coverage=100, template=None, **user_data):
         """A convenient way to call nwise generator. 
@@ -463,9 +400,9 @@ class EcFeed:
                           template=None, **user_data) -> str:
                           
         if genserver == None:
-            genserver = self.__context.genserver
+            genserver = self.genserver
         if model == None:
-            model = self.__context.model
+            model = self.model
 
         generate_params={}
         generate_params['method'] = ''
