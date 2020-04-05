@@ -17,8 +17,8 @@ ecfeed = EcFeed(model='0168-4412-8644-9433-6380')
 #     print(line)
 
 #### RANDOM ####
-# for line in ecfeed.random('TestClass.method', length=5, duplicates=True, adaptive=True, template=TemplateType.JSON):
-#     print(line)
+for line in ecfeed.random('TestClass.method', length=5, duplicates=True, adaptive=True, template=TemplateType.XML):
+    print(line)
 
 #### STATIC ####
 # for line in ecfeed.static_suite('TestClass.method', test_suites=['suite1', 'suite2'], template=TemplateType.XML): 
@@ -26,8 +26,8 @@ ecfeed = EcFeed(model='0168-4412-8644-9433-6380')
 # for line in ecfeed.static_suite('TestClass.method', template=TemplateType.JSON): #All suites by default
 #     print(line)
 
-class TestedClass:
-    @pytest.mark.parametrize(ecfeed.method_arg_names(method_name='TestClass.method'), ecfeed.random(method='TestClass.method', length=5))
-    def test_method_1(self, arg1, arg2, arg3, arg4, arg5):
-        print('method(' + str(arg1) + ', ' + str(arg2) + ', ' + str(arg3) + ', ' + str(arg4) + ', ' + str(arg5) + ')')
+# class TestedClass:
+#     @pytest.mark.parametrize(ecfeed.method_arg_names(method_name='TestClass.method'), ecfeed.random(method='TestClass.method', length=5))
+#     def test_method_1(self, arg1, arg2, arg3, arg4, arg5):
+#         print('method(' + str(arg1) + ', ' + str(arg2) + ', ' + str(arg3) + ', ' + str(arg4) + ', ' + str(arg5) + ')')
 
