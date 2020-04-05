@@ -79,21 +79,21 @@ class EcFeed:
         self.keystore_path = keystore_path
         self.password = password
 
-    def generate(self, method, data_source, model=None, template=None, request_only=False, **user_data):
+    def generate(self, **kwargs):
         """Generic call to ecfeed generator service
 
         Parameters
         ----------
-        method : str
-            full name (including full class path) of the method that 
+        method : str, required
+            Full name (including full class path) of the method that 
             will be used for generation. 
 
             Method parameters are not required. If parameters are not
             provided, the generator will generate data from the first 
             method it finds with that name
 
-        data_source : str 
-            the way how generator service will obtain the data. In general
+        data_source : str, required
+            The way how generator service will obtain the data. In general
             it may define the generator type (nwise, random, etc.) or pre-generated
             test suite.
 
@@ -133,13 +133,19 @@ class EcFeed:
             If the generator service resposes with error
         """
 
-        if model == None:
-            model = self.model
+        try:
+            method = kwargs.pop('method')
+            data_source = kwargs.pop('data_source')
+        except KeyError as e:
+            raise EcFeedError(f"missing required argument: {e}.")
+
+        model = kwargs.pop('model', self.model)
+        template = kwargs.pop('template', None)
 
         request = self.__prepare_request(genserver=self.genserver, 
                             model=model, method=method, 
                             data_source=data_source, template=template, 
-                            **user_data)
+                            **kwargs)
 
         with open(self.keystore_path, 'rb') as keystore_file:
             keystore = crypto.load_pkcs12(keystore_file.read(), self.password.encode('utf8'))
@@ -166,7 +172,7 @@ class EcFeed:
                     line = line.decode('utf-8')
                     if template != None:
                         yield line
-                    elif 'raw_output' in user_data and user_data['raw_output'] == True:
+                    elif 'raw_output' in kwargs and kwargs['raw_output'] == True:
                         yield line
                     else:
                         test_data = self.__parse_test_line(line=line)
@@ -180,7 +186,7 @@ class EcFeed:
             remove(temp_pkey_file.name)
             remove(temp_ca_file.name)
 
-    def nwise(self, method, n, coverage=100, template=None, **user_data):
+    def nwise(self, **kwargs):
         """A convenient way to call nwise generator. 
 
         Parameters
@@ -209,12 +215,12 @@ class EcFeed:
         """
 
         properties={}
-        properties['n'] = str(n)
-        properties['coverage'] = str(coverage)
-        yield from self.generate(method=method, data_source=DataSource.NWISE, 
-                                 properties=properties, template=template, **user_data)
+        properties['n'] = str(kwargs.pop('n', 2))
+        properties['coverage'] = str(kwargs.pop('coverage', 100))
+        kwargs['properties'] = properties
+        yield from self.generate(data_source=DataSource.NWISE, **kwargs)
 
-    def pairwise(self, method, coverage=100, template=None, **user_data):
+    def pairwise(self, **kwargs):
         """Calls nwise with n=2
 
         Parameters
@@ -238,9 +244,11 @@ class EcFeed:
             See 'generate'                         
         """
 
-        yield from self.nwise(method, n=2, coverage=coverage, template=template, **user_data)
+        n = kwargs.pop('n', 2)
+        coverage = kwargs.pop('coverage', 100)
+        yield from self.nwise(n=n, coverage=coverage, **kwargs)
 
-    def cartesian(self, method, template=None, **user_data):
+    def cartesian(self, **kwargs):
         """Calls cartesian generator
 
         Parameters
@@ -262,9 +270,12 @@ class EcFeed:
 
         """
 
-        yield from self.generate(method=method, data_source=DataSource.CARTESIAN, template=template, **user_data)
+        properties={}
+        properties['coverage'] = str(kwargs.pop('coverage', 100))
 
-    def random(self, method, length, adaptive=True, duplicates=False, template=None, **user_data):
+        yield from self.generate(data_source=DataSource.CARTESIAN, **kwargs)
+
+    def random(self, **kwargs):
         """Calls random generator
 
         Parameters
@@ -293,13 +304,13 @@ class EcFeed:
         """
 
         properties={}
-        properties['adaptive'] = str(adaptive).lower()
-        properties['duplicates'] = str(duplicates).lower()
-        properties['length'] = str(length)
-        user_data['properties'] = properties
-        yield from self.generate(method=method, data_source=DataSource.RANDOM, template=template, **user_data)
+        properties['adaptive'] = str(kwargs.pop('adaptive', True)).lower()
+        properties['duplicates'] = str(kwargs.pop('duplicates', False)).lower()
+        properties['length'] = str(kwargs.pop('length', 1))
 
-    def static_suite(self, method, test_suites=None, template=None, **user_data):
+        yield from self.generate(data_source=DataSource.RANDOM, properties=properties, **kwargs)
+
+    def static_suite(self, **kwargs):
         """Calls generator service for pre-generated data from test suites
 
         Parameters
@@ -315,8 +326,7 @@ class EcFeed:
 
         """
 
-        user_data['test_suites'] = test_suites
-        yield from self.generate(method=method, data_source=DataSource.STATIC_DATA, template=template, **user_data)
+        yield from self.generate(data_source=DataSource.STATIC_DATA, **kwargs)
 
     def method_info(self, method, model=None):
         """Queries generator service for information about the method
