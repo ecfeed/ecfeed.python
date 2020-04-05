@@ -41,7 +41,7 @@ class DataSource(Enum):
         if self == DataSource.RANDOM:
             return 'genRandom'
 
-class EcFeed:
+class TestProvider:
     '''Access provider to ecFeed remote generator services
 
     ...
