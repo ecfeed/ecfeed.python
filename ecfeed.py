@@ -7,6 +7,10 @@ import tempfile
 import json
 from enum import Enum
 
+import importlib
+
+
+
 class EcFeedError(Exception):
     pass
 
@@ -492,6 +496,15 @@ class TestProvider:
             return value
         elif typename in ['booolean']:
             return value.lower in ['true', '1']
+        else:
+            i = typename.rfind('.')
+            module_name = typename[:i]
+            type_name = typename[i+1:]
+            if i != -1 and module_name != '':
+                module = importlib.import_module(module_name)
+                enum_type = getattr(module, type_name)
+                return enum_type[value]
+            
 
 
 
