@@ -8,7 +8,7 @@ import json
 from enum import Enum
 
 import importlib
-
+import asyncio
 
 
 class EcFeedError(Exception):
@@ -190,6 +190,8 @@ class TestProvider:
             remove(temp_pkey_file.name)
             remove(temp_ca_file.name)
 
+    
+
     def nwise(self, **kwargs):
         """A convenient way to call nwise generator. 
 
@@ -331,6 +333,39 @@ class TestProvider:
         """
 
         yield from self.generate(data_source=DataSource.STATIC_DATA, **kwargs)
+
+    async def async_generate(self, **kwargs):
+        handler = kwargs.pop('handler', None)
+        generate_function = kwargs.pop('generate_function', None)
+        try:
+            for line in generate_function(**kwargs):
+                try:
+                    handler(line)
+                except Exception as e:
+                    raise EcFeedError(f"Couldn't call handler for generated line: {e}")
+        except Exception as e:
+            raise EcFeedError(f"Couldn't call generator function: {e}")
+
+    def async_nwise(self, **kwargs):
+        task = asyncio.create_task(self.async_generate(generate_function=self.nwise, **kwargs))
+        return task
+
+    def async_pairwise(self, **kwargs):
+        task = asyncio.create_task(self.async_generate(generate_function=self.pairwise, **kwargs))
+        return task
+
+    def async_random(self, **kwargs):
+        task = asyncio.create_task(self.async_generate(generate_function=self.random, **kwargs))
+        return task
+
+    def async_cartesian(self, **kwargs):
+        task = asyncio.create_task(self.async_generate(generate_function=self.nwise, **kwargs))
+        return task
+
+    def async_static(self, **kwargs):
+        task = asyncio.create_task(self.async_generate(generate_function=self.nwise, **kwargs))
+        return task
+
 
     def method_info(self, method, model=None):
         """Queries generator service for information about the method

@@ -1,6 +1,8 @@
 import pytest
 from ecfeed import TestProvider, TemplateType, DataSource
 from enum import Enum
+import asyncio
+from time import sleep
 
 ecfeed = TestProvider(model='0168-4412-8644-9433-6380')
 
@@ -47,7 +49,25 @@ class MyEnum(Enum):
 # for line in ecfeed.random(method='TestClass.testEnum', length=5, duplicates=True, adaptive=True, template=TemplateType.CSV):
 #     print(line)
 
-class TestedClassWithEnum:
-    @pytest.mark.parametrize(ecfeed.method_arg_names(method_name='TestClass.testEnum'), ecfeed.random(method='TestClass.testEnum', length=5))
-    def test_method_1(self, arg1, arg2, arg3, arg4):
-        print('method(' + str(arg1) + ', ' + str(arg2) + ', ' + str(arg3) + ', ' + str(arg4) + ')')
+# class TestedClassWithEnum:
+#     @pytest.mark.parametrize(ecfeed.method_arg_names(method_name='TestClass.testEnum'), ecfeed.random(method='TestClass.testEnum', length=5))
+#     def test_method_1(self, arg1, arg2, arg3, arg4):
+#         print('method(' + str(arg1) + ', ' + str(arg2) + ', ' + str(arg3) + ', ' + str(arg4) + ')')
+
+
+######### ASYNC ############
+
+def handler(line):
+    print(str(line))
+
+async def async_generate_call():
+    task = ecfeed.async_nwise(method='TestClass.method', handler=handler)
+    print('1')   
+    sleep(1)
+    for i in range(10):
+        print('.')   
+    await task
+    print('cycki')   
+    # await task_nwise
+
+asyncio.run(async_generate_call())
