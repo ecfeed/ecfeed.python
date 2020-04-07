@@ -429,7 +429,7 @@ class TestProvider:
             generate_params['template'] = str(template)
             request_type='requestExport'
 
-        request = 'https://' + genserver + '/testCaseService?requestType=' + request_type + '&request='
+        request = 'https://' + genserver + '/testCaseService?requestType=' + request_type + '&client=python' + '&request='
         request += json.dumps(generate_params).replace(' ', '')
         return request
 
