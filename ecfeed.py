@@ -124,6 +124,10 @@ class TestProvider:
             List of constraints used for the generation. If not provided, all constraints 
             will be used
 
+        template : TemplateType
+            Template to be used when exporting data to text. If set to None
+            data will be casted to arument type
+
         Yields
         -------
             If a template was not provided, the function yields tuples of values casted
