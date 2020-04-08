@@ -12,9 +12,14 @@ the generated data from python code.
 EcFeed library is built and tested with Python 3.6, althought it should work with earlier versions of Python 3. 
 The only dependency is pyopenssl
 
+## Installation
+```
+pip3 install ecfeed
+```
+
 ## API documentation
 
-For complete API documentation see docstring content of the ecfeed package. For example
+For complete API documentation see docstring content of the ecfeed package. For example type in your python console:
 ```
 import ecfeed
 import pydoc
