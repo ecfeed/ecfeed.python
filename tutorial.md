@@ -1,6 +1,11 @@
+
+
 ## Quick start
 For complete API documentation see docstring content of the ecfeed package, here we will just show the basic functionality
 provided by the package. We will use the default model that is created for new users at ecfeed.com. By default it is named 'Tutorial'
+
+## Keystore
+EcFeed service identifies the user using a certificate provided by user. The certificate can be created at ecfeed.com (_account settings->Security_).
 
 ### Using the API
 
