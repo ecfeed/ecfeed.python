@@ -9,3 +9,5 @@ dist/*
 ecfeed
 venv/*
 .idea/*
+ecfeed.egg-info/*
+
