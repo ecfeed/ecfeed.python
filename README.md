@@ -16,15 +16,6 @@ The only dependency is pyopenssl
 ```
 pip3 install ecfeed
 ```
+## Manual
 
-## API documentation
-
-For complete API documentation see docstring content of the ecfeed package. For example type in your python console:
-```
-import ecfeed
-import pydoc
-pydoc.doc(ecfeed)
-pydoc.doc(ecfeed.TestProvider)
-pydoc.doc(ecfeed.TestProvider.nwise)
-```
-
+See tutorials at ecfeed.com
