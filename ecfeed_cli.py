@@ -39,7 +39,7 @@ def parse_arguments():
     connection_args = parser.add_argument_group('Connection arguments', 'Arguments related to connection and authorization to ecFeed server. In most cases the default options will be fine.')
     connection_args.add_argument('--keystore', dest='keystore', action='store', help='Path of the keystore file. Default is ~/.ecfeed/security.p12', default=os.path.expanduser('~/.ecfeed/security.p12'))
     connection_args.add_argument('--password', dest='password', action='store', help='Password to keystore. Default is "changeit"', default='changeit')
-    connection_args.add_argument('--genserver', dest='genserver', action='store', help='Address of the ecfeed service. Default is "develop-gen.ecfeed.com"', default='develop-gen.ecfeed.com')
+    connection_args.add_argument('--genserver', dest='genserver', action='store', help='Address of the ecfeed service. Default is "gen.ecfeed.com"', default='gen.ecfeed.com')
 
     generator_group = required_args.add_mutually_exclusive_group(required=True)
     generator_group.add_argument('--pairwise', dest='data_source', action='store_const', const='pairwise', help='Use pairwise generator. Equal to --nwise -n 2')

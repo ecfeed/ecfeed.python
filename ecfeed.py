@@ -58,14 +58,14 @@ class TestProvider:
 
     model = ''
 
-    def __init__(self, genserver = 'develop-gen.ecfeed.com', 
+    def __init__(self, genserver = 'gen.ecfeed.com', 
                  keystore_path=path.expanduser('~/.ecfeed/security.p12'), password='changeit',
                  model=None):
         '''
         Parameters
         ----------
         genserver : str
-            url to ecFeed generator service (default is 'develop-gen.ecfeed.com')
+            url to ecFeed generator service (default is 'gen.ecfeed.com')
 
         keystore_path : str
             path to keystore file with user and server certificates (default is '~/.ecfeed.security.p12')
