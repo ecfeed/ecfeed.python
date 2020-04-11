@@ -5,12 +5,12 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="ecfeed", 
-    version="1.0.0b3",
+    version="1.0.0b5",
     author="EcFeed AS",
     author_email="mail@ecfeed.com",
     description="Python interface for accessing EcFeed online generator service",
-    long_description=long_description,
     long_description_content_type="text/markdown",
+    long_description=long_description,
     url="https://github.com/ecfeed/ecfeed.python",
     classifiers=[
         "Development Status :: 4 - Beta",

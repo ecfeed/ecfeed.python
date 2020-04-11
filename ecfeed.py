@@ -6,10 +6,18 @@ import tempfile
 
 import json
 from enum import Enum
+import sys
 
 import importlib
 
+def __default_keystore_path():
+    if sys.platform == 'win32':
+        return path.expanduser('~/ecfeed/security.p12')
+    return path.expanduser('~/.ecfeed/security.p12')
 
+DEFAULT_GENSERVER = 'gen.ecfeed.com'
+DEFAULT_KEYSTORE_PATH = __default_keystore_path()
+DEFAULT_KEYSTORE_PASSWORD = 'changeit'
 
 class EcFeedError(Exception):
     pass
@@ -58,8 +66,9 @@ class TestProvider:
 
     model = ''
 
-    def __init__(self, genserver = 'gen.ecfeed.com', 
-                 keystore_path=path.expanduser('~/.ecfeed/security.p12'), password='changeit',
+    def __init__(self, genserver = DEFAULT_GENSERVER, 
+                 keystore_path=DEFAULT_KEYSTORE_PATH, 
+                 password=DEFAULT_KEYSTORE_PASSWORD,
                  model=None):
         '''
         Parameters
@@ -68,7 +77,9 @@ class TestProvider:
             url to ecFeed generator service (default is 'gen.ecfeed.com')
 
         keystore_path : str
-            path to keystore file with user and server certificates (default is '~/.ecfeed.security.p12')
+            path to keystore file with user and server certificates 
+            (default is '~/.ecfeed.security.p12' on windows and 
+            '~/.ecfeed.security.p12' otherwise)
 
         password : str
             password to keystore (default is 'changeit')
