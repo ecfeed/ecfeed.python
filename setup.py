@@ -25,7 +25,7 @@ setuptools.setup(
     python_requires='>=3.6',
     keywords = 'testing pairwise test_generation',
     py_modules=['ecfeed', 'ecfeed_cli'],
-    install_requires=['pyopenssl'],
+    install_requires=['pyopenssl', 'requests'],
     entry_points={
         'console_scripts':[
             'ecfeed=ecfeed_cli:main'
