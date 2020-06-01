@@ -10,4 +10,4 @@ ecfeed
 venv/*
 .idea/*
 ecfeed.egg-info/*
-
+.vscode/

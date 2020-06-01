@@ -6,20 +6,20 @@ ecfeed = TestProvider(model='2037-6847-2110-8251-1296')
 
 #### access to generators in python code
 #### NWISE ####
-#for line in ecfeed.nwise(method='QuickStart.test', n=3, template=TemplateType.Gherkin, coverage=10):
-#    print(line)
+# for line in ecfeed.nwise(method='TestClass.method', n=3, template=TemplateType.Gherkin, coverage=40):
+#     print(line)
 
 #### PAIRWISE ####
-# for line in ecfeed.pairwise(method='QuickStart.test', template=TemplateType.XML, coverage=10):
+# for line in ecfeed.pairwise(method='TestClass.method', template=TemplateType.XML, coverage=10):
 #     print(line)
 
 #### CARTESIAN ####
-# for line in ecfeed.cartesian(method='QuickStart.test', coverage=40, choices={'arg1':['choice1'], 'arg3':['choice2', 'choice4']}): #No template!
+# for line in ecfeed.cartesian(method='TestClass.method', coverage=40, choices={'arg1':['choice1'], 'arg3':['choice2', 'choice4']}): #No template!
 #     print(line)
 
 #### RANDOM ####
-for line in ecfeed.random(method='TestClass.method', length=5, duplicates=True, adaptive=False, template=TemplateType.CSV, constraints=["constraint"]):
-     print(line)
+for line in ecfeed.export_random(method='TestClass.method', length=5, duplicates=True, adaptive=True, template=TemplateType.CSV):
+    print(line)
 
 #### STATIC ####
 # for line in ecfeed.static_suite(method='TestClass.method', test_suites=['suite1'], template=TemplateType.XML): 
@@ -47,7 +47,7 @@ class MyEnum(Enum):
 # for line in ecfeed.random(method='TestClass.testEnum', length=5, duplicates=True, adaptive=True, template=TemplateType.CSV):
 #     print(line)
 
-# class TestedClassWithEnum:
-#     @pytest.mark.parametrize(ecfeed.method_arg_names(method_name='TestClass.testEnum'), ecfeed.random(method='TestClass.testEnum', length=5))
-#     def test_method_1(self, arg1, arg2, arg3, arg4):
-#         print('method(' + str(arg1) + ', ' + str(arg2) + ', ' + str(arg3) + ', ' + str(arg4) + ')')
+#class TestedClassWithEnum:
+#    @pytest.mark.parametrize(ecfeed.method_arg_names(method_name='TestClass.testEnum'), ecfeed.random(method='TestClass.testEnum', length=5))
+#    def test_method_1(self, arg1, arg2, arg3, arg4):
+#        print('method(' + str(arg1) + ', ' + str(arg2) + ', ' + str(arg3) + ', ' + str(arg4) + ')')
