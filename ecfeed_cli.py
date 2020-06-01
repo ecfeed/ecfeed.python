@@ -12,20 +12,35 @@ def main():
     if args['output'] != None:
         sys.stdout = open(args['output'], 'w')
 
-    if args['data_source'] == DataSource.NWISE:
-        for line in ecfeed.nwise(method=args['method'], n=args['n'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
+    if args['data_source'] == DataSource.EXPORT_NWISE:
+        for line in ecfeed.export_nwise(method=args['method'], n=args['n'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
             print(line)
-    elif args['data_source'] == 'pairwise':
-        for line in ecfeed.pairwise(method=args['method'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
+    elif args['data_source'] == 'export_pairwise':
+        for line in ecfeed.export_pairwise(method=args['method'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
             print(line)
-    elif args['data_source'] == DataSource.CARTESIAN:
-        for line in ecfeed.cartesian(method=args['method'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
+    elif args['data_source'] == DataSource.EXPORT_CARTESIAN:
+        for line in ecfeed.export_cartesian(method=args['method'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
             print(line)
-    elif args['data_source'] == DataSource.RANDOM:
-        for line in ecfeed.random(method=args['method'], length=args['length'], adaptive=args['adaptive'], duplicates=args['duplicates'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
+    elif args['data_source'] == DataSource.EXPORT_RANDOM:
+        for line in ecfeed.export_random(method=args['method'], length=args['length'], adaptive=args['adaptive'], duplicates=args['duplicates'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
             print(line)
-    elif args['data_source'] == DataSource.STATIC_DATA:
-        for line in ecfeed.static_suite(method=args['method'], length=args['length'], test_suites=args['suites'], template=args['template']):
+    elif args['data_source'] == DataSource.EXPORT_STATIC_DATA:
+        for line in ecfeed.export_static_suite(method=args['method'], length=args['length'], test_suites=args['suites'], template=args['template']):
+            print(line)
+    elif args['data_source'] == DataSource.GENERATE_NWISE:
+        for line in ecfeed.export_nwise(method=args['method'], n=args['n'], coverage=args['coverage'], choices=args['choices'], constraints=args['constraints']):
+            print(line)
+    elif args['data_source'] == 'generate_pairwise':
+        for line in ecfeed.generate_pairwise(method=args['method'], coverage=args['coverage'], choices=args['choices'], constraints=args['constraints']):
+            print(line)
+    elif args['data_source'] == DataSource.GENERATE_CARTESIAN:
+        for line in ecfeed.generate_cartesian(method=args['method'], coverage=args['coverage'], choices=args['choices'], constraints=args['constraints']):
+            print(line)
+    elif args['data_source'] == DataSource.GENERATE_RANDOM:
+        for line in ecfeed.generate_random(method=args['method'], length=args['length'], adaptive=args['adaptive'], duplicates=args['duplicates'], choices=args['choices'], constraints=args['constraints']):
+            print(line)
+    elif args['data_source'] == DataSource.GENERATE_STATIC_DATA:
+        for line in ecfeed.generate_static_suite(method=args['method'], length=args['length'], test_suites=args['suites']):
             print(line)
     else:
         sys.stderr.write('Unknown data generator: ' + str(args['data_source']))
@@ -35,7 +50,7 @@ def parse_arguments():
 
     required_args = parser.add_argument_group('Required arguments', 'Thess arguments must be always provided when invoking ecfeed command')
     required_args.add_argument('--model', dest='model', action='store', help='Id of the accessed model', required=True)
-    required_args.add_argument('--method', dest='method', action='store', help='Full name of the method used for generation tests. If the model contains only one methd with this name, the argument types may be skipped. For example "--method com.test.TestClass.testMethod", or "--method com.test.TestClass.TestMethod(int, String)"', required=True)
+    required_args.add_argument('--method', dest='method', action='store', help='Full name of the method used for generation tests. If the model contains only one method with this name, the argument types may be skipped. For example "--method com.test.TestClass.testMethod", or "--method com.test.TestClass.TestMethod(int, String)"', required=True)
 
     connection_args = parser.add_argument_group('Connection arguments', 'Arguments related to connection and authorization to ecFeed server. In most cases the default options will be fine.')
     connection_args.add_argument('--keystore', dest='keystore', action='store', help='Path of the keystore file. Default is ~/.ecfeed/security.p12', default=ecfeed.DEFAULT_KEYSTORE_PATH)
@@ -43,11 +58,16 @@ def parse_arguments():
     connection_args.add_argument('--genserver', dest='genserver', action='store', help='Address of the ecfeed service. Default is "gen.ecfeed.com"', default=ecfeed.DEFAULT_GENSERVER)
 
     generator_group = required_args.add_mutually_exclusive_group(required=True)
-    generator_group.add_argument('--pairwise', dest='data_source', action='store_const', const='pairwise', help='Use pairwise generator. Equal to --nwise -n 2')
-    generator_group.add_argument('--nwise', dest='data_source', action='store_const', const=DataSource.NWISE, help='Use NWise generator')
-    generator_group.add_argument('--cartesian', dest='data_source', action='store_const', const=DataSource.CARTESIAN, help='Use cartesian generator')
-    generator_group.add_argument('--random', dest='data_source', action='store_const', const=DataSource.RANDOM, help='Use random generator')
-    generator_group.add_argument('--static', dest='data_source', action='store_const', const=DataSource.STATIC_DATA, help='Fetch pre generated tests from the server')
+    generator_group.add_argument('--export_pairwise', dest='data_source', action='store_const', const='export_pairwise', help='Use pairwise generator. Equal to --nwise -n 2')
+    generator_group.add_argument('--export_nwise', dest='data_source', action='store_const', const=DataSource.EXPORT_NWISE, help='Use NWise generator')
+    generator_group.add_argument('--export_cartesian', dest='data_source', action='store_const', const=DataSource.EXPORT_CARTESIAN, help='Use cartesian generator')
+    generator_group.add_argument('--export_random', dest='data_source', action='store_const', const=DataSource.EXPORT_RANDOM, help='Use random generator')
+    generator_group.add_argument('--export_static', dest='data_source', action='store_const', const=DataSource.EXPORT_STATIC_DATA, help='Fetch pre generated tests from the server')
+    generator_group.add_argument('--generate_pairwise', dest='data_source', action='store_const', const='generate_pairwise', help='Use pairwise generator. Equal to --nwise -n 2')
+    generator_group.add_argument('--generate_nwise', dest='data_source', action='store_const', const=DataSource.GENERATE_NWISE, help='Use NWise generator')
+    generator_group.add_argument('--generate_cartesian', dest='data_source', action='store_const', const=DataSource.GENERATE_CARTESIAN, help='Use cartesian generator')
+    generator_group.add_argument('--generate_random', dest='data_source', action='store_const', const=DataSource.GENERATE_RANDOM, help='Use random generator')
+    generator_group.add_argument('--generate_static', dest='data_source', action='store_const', const=DataSource.GENERATE_STATIC_DATA, help='Fetch pre generated tests from the server')
 
     nwise_group = parser.add_argument_group('NWise generator arguments', 'These arguments are valid only with NWise generator')
     nwise_group.add_argument('-n', action='store', dest='n', default=2, help='n in nwise')

@@ -18,7 +18,7 @@ ecfeed = TestProvider(model='2037-6847-2110-8251-1296')
 #     print(line)
 
 #### RANDOM ####
-for line in ecfeed.random(method='TestClass.method', length=5, duplicates=True, adaptive=True, template=TemplateType.CSV):
+for line in ecfeed.export_random(method='TestClass.method', length=5, duplicates=True, adaptive=True, template=TemplateType.CSV):
     print(line)
 
 #### STATIC ####

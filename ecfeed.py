@@ -10,15 +10,6 @@ import sys
 
 import importlib
 
-def __default_keystore_path():
-    if sys.platform == 'win32':
-        return path.expanduser('~/ecfeed/security.p12')
-    return path.expanduser('~/.ecfeed/security.p12')
-
-DEFAULT_GENSERVER = 'gen.ecfeed.com'
-DEFAULT_KEYSTORE_PATH = __default_keystore_path()
-DEFAULT_KEYSTORE_PASSWORD = 'changeit'
-
 class EcFeedError(Exception):
     pass
 
@@ -35,23 +26,45 @@ class TemplateType(Enum):
         return self.name
 
 class DataSource(Enum):
-    STATIC_DATA = 0
-    NWISE = 1
-    CARTESIAN = 2
-    RANDOM = 3
+    EXPORT_STATIC_DATA = 0
+    EXPORT_NWISE = 1
+    EXPORT_PAIRWISE = 2
+    EXPORT_CARTESIAN = 3
+    EXPORT_RANDOM = 4
+    GENERATE_STATIC_DATA = 5
+    GENERATE_NWISE = 6
+    GENERATE_PAIRWISE = 7
+    GENERATE_CARTESIAN = 8
+    GENERATE_RANDOM = 9
 
     def __repr__(self):
         return self.to_url_param()
 
     def to_url_param(self):
-        if self == DataSource.STATIC_DATA:
+        if ((self == DataSource.EXPORT_STATIC_DATA) or \
+            (self == DataSource.GENERATE_STATIC_DATA)):
             return 'static'
-        if self == DataSource.NWISE:
+        if ((self == DataSource.EXPORT_NWISE) or \
+            (self == DataSource.EXPORT_PAIRWISE) or \
+            (self == DataSource.GENERATE_NWISE) or \
+            (self == DataSource.GENERATE_PAIRWISE)):
             return 'genNWise'
-        if self == DataSource.CARTESIAN:
+        if ((self == DataSource.EXPORT_CARTESIAN) or \
+            (self == DataSource.GENERATE_CARTESIAN)):
             return 'genCartesian'
-        if self == DataSource.RANDOM:
+        if ((self == DataSource.EXPORT_RANDOM) or \
+            (self == DataSource.GENERATE_RANDOM)):
             return 'genRandom'
+
+def __default_keystore_path():
+    if sys.platform == 'win32':
+        return path.expanduser('~/ecfeed/security.p12')
+    return path.expanduser('~/.ecfeed/security.p12')
+
+DEFAULT_GENSERVER = 'gen.ecfeed.com'
+DEFAULT_KEYSTORE_PATH = __default_keystore_path()
+DEFAULT_KEYSTORE_PASSWORD = 'changeit'
+DEFAULT_TEMPLATE = TemplateType.CSV
 
 class TestProvider:
     '''Access provider to ecFeed remote generator services
@@ -137,7 +150,7 @@ class TestProvider:
 
         template : TemplateType
             Template to be used when exporting data to text. If set to None
-            data will be casted to arument type
+            data will be casted to argument type
 
         Yields
         -------
@@ -205,7 +218,7 @@ class TestProvider:
             remove(temp_pkey_file.name)
             remove(temp_ca_file.name)
 
-    def nwise(self, **kwargs):
+    def export_nwise(self, **kwargs):
         """A convenient way to call nwise generator. 
 
         Parameters
@@ -236,10 +249,44 @@ class TestProvider:
         properties={}
         properties['n'] = str(kwargs.pop('n', 2))
         properties['coverage'] = str(kwargs.pop('coverage', 100))
+        kwargs['template'] = str(kwargs.pop('template', DEFAULT_TEMPLATE))
         kwargs['properties'] = properties
-        yield from self.generate(data_source=DataSource.NWISE, **kwargs)
 
-    def pairwise(self, **kwargs):
+        yield from self.generate(data_source=DataSource.EXPORT_NWISE, **kwargs)
+
+    def generate_nwise(self, **kwargs):
+        """A convenient way to call nwise generator. 
+
+        Parameters
+        ----------
+        method : str
+            See 'generate'
+
+        n : int
+            The 'N' in NWise
+
+        coverage : int
+            The percent of N-tuples that the generator will try to cover.         
+
+        choices : dictionary
+            See 'generate'                         
+
+        constraints : dictionary
+            See 'generate'                         
+
+        model : str
+            See 'generate'                         
+
+        """
+
+        properties={}
+        properties['n'] = str(kwargs.pop('n', 2))
+        properties['coverage'] = str(kwargs.pop('coverage', 100))
+        kwargs['template'] = None
+        kwargs['properties'] = properties
+        yield from self.generate(data_source=DataSource.EXPORT_NWISE, **kwargs)
+
+    def export_pairwise(self, **kwargs):
         """Calls nwise with n=2
 
         Parameters
@@ -265,9 +312,34 @@ class TestProvider:
 
         n = kwargs.pop('n', 2)
         coverage = kwargs.pop('coverage', 100)
-        yield from self.nwise(n=n, coverage=coverage, **kwargs)
+        yield from self.export_nwise(n=n, coverage=coverage, **kwargs)
 
-    def cartesian(self, **kwargs):
+    def generate_pairwise(self, **kwargs):
+        """Calls nwise with n=2
+
+        Parameters
+        ----------
+        method : str
+            See 'generate'
+            
+        coverage : int
+            See 'nwise'       
+
+        choices : dictionary
+            See 'generate' 
+
+        constraints : dictionary
+            See 'generate' 
+
+        model : str
+            See 'generate'                         
+        """
+
+        n = kwargs.pop('n', 2)
+        coverage = kwargs.pop('coverage', 100)
+        yield from self.generate_nwise(n=n, coverage=coverage, **kwargs)
+
+    def export_cartesian(self, **kwargs):
         """Calls cartesian generator
 
         Parameters
@@ -291,10 +363,36 @@ class TestProvider:
 
         properties={}
         properties['coverage'] = str(kwargs.pop('coverage', 100))
+        kwargs['template'] = str(kwargs.pop('template', DEFAULT_TEMPLATE))
 
-        yield from self.generate(data_source=DataSource.CARTESIAN, **kwargs)
+        yield from self.generate(data_source=DataSource.EXPORT_CARTESIAN, **kwargs)
 
-    def random(self, **kwargs):
+    def generate_cartesian(self, **kwargs):
+        """Calls cartesian generator
+
+        Parameters
+        ----------
+        method : str
+            See 'generate'         
+
+        choices : dictionary
+            See 'generate' 
+
+        constraints : dictionary
+            See 'generate' 
+
+        model : str
+            See 'generate'                         
+
+        """
+
+        properties={}
+        properties['coverage'] = str(kwargs.pop('coverage', 100))
+        kwargs['template'] = None
+
+        yield from self.generate(data_source=DataSource.EXPORT_CARTESIAN, **kwargs)
+
+    def export_random(self, **kwargs):
         """Calls random generator
 
         Parameters
@@ -326,16 +424,53 @@ class TestProvider:
         properties['adaptive'] = str(kwargs.pop('adaptive', True)).lower()
         properties['duplicates'] = str(kwargs.pop('duplicates', False)).lower()
         properties['length'] = str(kwargs.pop('length', 1))
+        kwargs['template'] = str(kwargs.pop('template', DEFAULT_TEMPLATE))
 
-        yield from self.generate(data_source=DataSource.RANDOM, properties=properties, **kwargs)
+        yield from self.generate(data_source=DataSource.EXPORT_RANDOM, properties=properties, **kwargs)
 
-    def static_suite(self, **kwargs):
+    def generate_random(self, **kwargs):
+        """Calls random generator
+
+        Parameters
+        ----------
+        method : str
+            See 'generate'        
+
+        length : int
+            Number of test cases to generate
+
+        adaptive : boolean
+            If set to True, the generator will try to maximize the Hamming distance
+            of each generate test case from already generated tests        
+
+        choices : dictionary
+            See 'generate' 
+
+        constraints : dictionary
+            See 'generate' 
+
+        model : str
+            See 'generate'                         
+        """
+
+        properties={}
+        properties['adaptive'] = str(kwargs.pop('adaptive', True)).lower()
+        properties['duplicates'] = str(kwargs.pop('duplicates', False)).lower()
+        properties['length'] = str(kwargs.pop('length', 1))
+        kwargs['template'] = None
+
+        yield from self.generate(data_source=DataSource.EXPORT_RANDOM, properties=properties, **kwargs)
+
+    def export_static_suite(self, **kwargs):
         """Calls generator service for pre-generated data from test suites
 
         Parameters
         ----------
         method : str
             See 'generate'        
+
+        template : str
+            See 'generate'           
 
         test_suites : list
             A list of test suites that shall be requested
@@ -345,7 +480,29 @@ class TestProvider:
 
         """
 
-        yield from self.generate(data_source=DataSource.STATIC_DATA, **kwargs)
+        kwargs['template'] = str(kwargs.pop('template', DEFAULT_TEMPLATE))
+
+        yield from self.generate(data_source=DataSource.EXPORT_STATIC_DATA, **kwargs)
+
+    def generate_static_suite(self, **kwargs):
+        """Calls generator service for pre-generated data from test suites
+
+        Parameters
+        ----------
+        method : str
+            See 'generate'                 
+
+        test_suites : list
+            A list of test suites that shall be requested
+
+        model : str
+            See 'generate'                         
+
+        """
+
+        kwargs['template'] = None
+
+        yield from self.generate(data_source=DataSource.EXPORT_STATIC_DATA, **kwargs)
 
     def method_info(self, method, model=None):
         """Queries generator service for information about the method
@@ -353,7 +510,7 @@ class TestProvider:
         Parameters
         ----------
         method : str
-            Querried method        
+            Queried method        
 
         model : str
             Model id of the model where the method is defined
@@ -368,7 +525,7 @@ class TestProvider:
         """
 
         info={}
-        for line in self.random(method=method, length=0, raw_output=True, model=model):
+        for line in self.generate_random(method=method, length=0, raw_output=True, model=model):
             line = line.replace('"{', '{').replace('}"', '}').replace('\'', '"')#fix wrong formatting in some versions of the gen-server
             try:                
                 parsed = json.loads(line)
@@ -519,8 +676,3 @@ class TestProvider:
                 module = importlib.import_module(module_name)
                 enum_type = getattr(module, type_name)
                 return enum_type[value]
-            
-
-
-
-
