@@ -13,34 +13,34 @@ def main():
         sys.stdout = open(args['output'], 'w')
 
     if args['data_source'] == DataSource.EXPORT_NWISE:
-        for line in ecfeed.export_nwise(method=args['method'], n=args['n'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
+        for line in ecfeed.export_nwise(method=args['method'], n=args['n'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints'], url=args['url']):
             print(line)
     elif args['data_source'] == 'export_pairwise':
-        for line in ecfeed.export_pairwise(method=args['method'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
+        for line in ecfeed.export_pairwise(method=args['method'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints'], url=args['url']):
             print(line)
     elif args['data_source'] == DataSource.EXPORT_CARTESIAN:
-        for line in ecfeed.export_cartesian(method=args['method'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
+        for line in ecfeed.export_cartesian(method=args['method'], coverage=args['coverage'], template=args['template'], choices=args['choices'], constraints=args['constraints'], url=args['url']):
             print(line)
     elif args['data_source'] == DataSource.EXPORT_RANDOM:
-        for line in ecfeed.export_random(method=args['method'], length=args['length'], adaptive=args['adaptive'], duplicates=args['duplicates'], template=args['template'], choices=args['choices'], constraints=args['constraints']):
+        for line in ecfeed.export_random(method=args['method'], length=args['length'], adaptive=args['adaptive'], duplicates=args['duplicates'], template=args['template'], choices=args['choices'], constraints=args['constraints'], url=args['url']):
             print(line)
     elif args['data_source'] == DataSource.EXPORT_STATIC_DATA:
-        for line in ecfeed.export_static_suite(method=args['method'], length=args['length'], test_suites=args['suites'], template=args['template']):
+        for line in ecfeed.export_static_suite(method=args['method'], length=args['length'], test_suites=args['suites'], template=args['template'], url=args['url']):
             print(line)
     elif args['data_source'] == DataSource.GENERATE_NWISE:
-        for line in ecfeed.export_nwise(method=args['method'], n=args['n'], coverage=args['coverage'], choices=args['choices'], constraints=args['constraints']):
+        for line in ecfeed.export_nwise(method=args['method'], n=args['n'], coverage=args['coverage'], choices=args['choices'], constraints=args['constraints'], url=args['url']):
             print(line)
     elif args['data_source'] == 'generate_pairwise':
-        for line in ecfeed.generate_pairwise(method=args['method'], coverage=args['coverage'], choices=args['choices'], constraints=args['constraints']):
+        for line in ecfeed.generate_pairwise(method=args['method'], coverage=args['coverage'], choices=args['choices'], constraints=args['constraints'], url=args['url']):
             print(line)
     elif args['data_source'] == DataSource.GENERATE_CARTESIAN:
-        for line in ecfeed.generate_cartesian(method=args['method'], coverage=args['coverage'], choices=args['choices'], constraints=args['constraints']):
+        for line in ecfeed.generate_cartesian(method=args['method'], coverage=args['coverage'], choices=args['choices'], constraints=args['constraints'], url=args['url']):
             print(line)
     elif args['data_source'] == DataSource.GENERATE_RANDOM:
-        for line in ecfeed.generate_random(method=args['method'], length=args['length'], adaptive=args['adaptive'], duplicates=args['duplicates'], choices=args['choices'], constraints=args['constraints']):
+        for line in ecfeed.generate_random(method=args['method'], length=args['length'], adaptive=args['adaptive'], duplicates=args['duplicates'], choices=args['choices'], constraints=args['constraints'], url=args['url']):
             print(line)
     elif args['data_source'] == DataSource.GENERATE_STATIC_DATA:
-        for line in ecfeed.generate_static_suite(method=args['method'], length=args['length'], test_suites=args['suites']):
+        for line in ecfeed.generate_static_suite(method=args['method'], length=args['length'], test_suites=args['suites'], url=args['url']):
             print(line)
     else:
         sys.stderr.write('Unknown data generator: ' + str(args['data_source']))
@@ -48,9 +48,12 @@ def main():
 def parse_arguments():
     parser = argparse.ArgumentParser(prog='ecfeed', description='command line utility to access ecFeec remote test generation service')    
 
-    required_args = parser.add_argument_group('Required arguments', 'Thess arguments must be always provided when invoking ecfeed command')
+    required_args = parser.add_argument_group('Required arguments', 'These arguments must be always provided when invoking ecfeed command')
     required_args.add_argument('--model', dest='model', action='store', help='Id of the accessed model', required=True)
     required_args.add_argument('--method', dest='method', action='store', help='Full name of the method used for generation tests. If the model contains only one method with this name, the argument types may be skipped. For example "--method com.test.TestClass.testMethod", or "--method com.test.TestClass.TestMethod(int, String)"', required=True)
+
+    optional_args = parser.add_argument_group('Optional arguments', 'Optional arguments altering the behavior of the generator')
+    optional_args.add_argument('--url', dest='url', action='store_const', const=True, help='Show the endpoint URL instead of generating test cases')
 
     connection_args = parser.add_argument_group('Connection arguments', 'Arguments related to connection and authorization to ecFeed server. In most cases the default options will be fine.')
     connection_args.add_argument('--keystore', dest='keystore', action='store', help='Path of the keystore file. Default is ~/.ecfeed/security.p12', default=ecfeed.DEFAULT_KEYSTORE_PATH)
