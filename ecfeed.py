@@ -180,6 +180,10 @@ class TestProvider:
                             data_source=data_source, template=template, 
                             **kwargs)
 
+        if(kwargs.pop('url', None)):
+            yield request
+            return
+
         with open(self.keystore_path, 'rb') as keystore_file:
             keystore = crypto.load_pkcs12(keystore_file.read(), self.password.encode('utf8'))
 
@@ -219,7 +223,15 @@ class TestProvider:
             remove(temp_pkey_file.name)
             remove(temp_ca_file.name)
 
-    def export_nwise(self, **kwargs):
+    def generate_nwise(self, **kwargs): return self.nwise(template=None, **kwargs)
+
+    def export_nwise(self, **kwargs): return self.nwise(template=str(kwargs.pop('template', DEFAULT_TEMPLATE)), **kwargs)
+
+    def generate_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', 2), template=None, **kwargs)
+
+    def export_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', 2), template=str(kwargs.pop('template', DEFAULT_TEMPLATE)), **kwargs)
+
+    def nwise(self, **kwargs):
         """A convenient way to call nwise generator. 
 
         Parameters
@@ -250,97 +262,15 @@ class TestProvider:
         properties={}
         properties['n'] = str(kwargs.pop('n', 2))
         properties['coverage'] = str(kwargs.pop('coverage', 100))
-        kwargs['template'] = str(kwargs.pop('template', DEFAULT_TEMPLATE))
         kwargs['properties'] = properties
 
         yield from self.generate(data_source=DataSource.EXPORT_NWISE, **kwargs)
 
-    def generate_nwise(self, **kwargs):
-        """A convenient way to call nwise generator. 
+    def generate_cartesian(self, **kwargs): return self.cartesian(template=None, **kwargs)
 
-        Parameters
-        ----------
-        method : str
-            See 'generate'
+    def export_cartesian(self, **kwargs): return self.cartesian(template=str(kwargs.pop('template', DEFAULT_TEMPLATE)), **kwargs)
 
-        n : int
-            The 'N' in NWise
-
-        coverage : int
-            The percent of N-tuples that the generator will try to cover.         
-
-        choices : dictionary
-            See 'generate'                         
-
-        constraints : dictionary
-            See 'generate'                         
-
-        model : str
-            See 'generate'                         
-
-        """
-
-        properties={}
-        properties['n'] = str(kwargs.pop('n', 2))
-        properties['coverage'] = str(kwargs.pop('coverage', 100))
-        kwargs['template'] = None
-        kwargs['properties'] = properties
-        yield from self.generate(data_source=DataSource.EXPORT_NWISE, **kwargs)
-
-    def export_pairwise(self, **kwargs):
-        """Calls nwise with n=2
-
-        Parameters
-        ----------
-        method : str
-            See 'generate'
-            
-        coverage : int
-            See 'nwise' 
-
-        template : str
-            See 'generate'            
-
-        choices : dictionary
-            See 'generate' 
-
-        constraints : dictionary
-            See 'generate' 
-
-        model : str
-            See 'generate'                         
-        """
-
-        n = kwargs.pop('n', 2)
-        coverage = kwargs.pop('coverage', 100)
-        yield from self.export_nwise(n=n, coverage=coverage, **kwargs)
-
-    def generate_pairwise(self, **kwargs):
-        """Calls nwise with n=2
-
-        Parameters
-        ----------
-        method : str
-            See 'generate'
-            
-        coverage : int
-            See 'nwise'       
-
-        choices : dictionary
-            See 'generate' 
-
-        constraints : dictionary
-            See 'generate' 
-
-        model : str
-            See 'generate'                         
-        """
-
-        n = kwargs.pop('n', 2)
-        coverage = kwargs.pop('coverage', 100)
-        yield from self.generate_nwise(n=n, coverage=coverage, **kwargs)
-
-    def export_cartesian(self, **kwargs):
+    def cartesian(self, **kwargs):
         """Calls cartesian generator
 
         Parameters
@@ -364,36 +294,14 @@ class TestProvider:
 
         properties={}
         properties['coverage'] = str(kwargs.pop('coverage', 100))
-        kwargs['template'] = str(kwargs.pop('template', DEFAULT_TEMPLATE))
 
         yield from self.generate(data_source=DataSource.EXPORT_CARTESIAN, **kwargs)
 
-    def generate_cartesian(self, **kwargs):
-        """Calls cartesian generator
+    def generate_random(self, **kwargs): return self.random(template=None, **kwargs)
 
-        Parameters
-        ----------
-        method : str
-            See 'generate'         
+    def export_random(self, **kwargs): return self.random(template=str(kwargs.pop('template', DEFAULT_TEMPLATE)), **kwargs)
 
-        choices : dictionary
-            See 'generate' 
-
-        constraints : dictionary
-            See 'generate' 
-
-        model : str
-            See 'generate'                         
-
-        """
-
-        properties={}
-        properties['coverage'] = str(kwargs.pop('coverage', 100))
-        kwargs['template'] = None
-
-        yield from self.generate(data_source=DataSource.EXPORT_CARTESIAN, **kwargs)
-
-    def export_random(self, **kwargs):
+    def random(self, **kwargs):
         """Calls random generator
 
         Parameters
@@ -425,44 +333,14 @@ class TestProvider:
         properties['adaptive'] = str(kwargs.pop('adaptive', True)).lower()
         properties['duplicates'] = str(kwargs.pop('duplicates', False)).lower()
         properties['length'] = str(kwargs.pop('length', 1))
-        kwargs['template'] = str(kwargs.pop('template', DEFAULT_TEMPLATE))
 
         yield from self.generate(data_source=DataSource.EXPORT_RANDOM, properties=properties, **kwargs)
 
-    def generate_random(self, **kwargs):
-        """Calls random generator
+    def generate_static_suite(self, **kwargs): return self.static_suite(template=None, **kwargs)
 
-        Parameters
-        ----------
-        method : str
-            See 'generate'        
+    def export_static_suite(self, **kwargs): return self.static_suite(template=str(kwargs.pop('template', DEFAULT_TEMPLATE)), **kwargs)
 
-        length : int
-            Number of test cases to generate
-
-        adaptive : boolean
-            If set to True, the generator will try to maximize the Hamming distance
-            of each generate test case from already generated tests        
-
-        choices : dictionary
-            See 'generate' 
-
-        constraints : dictionary
-            See 'generate' 
-
-        model : str
-            See 'generate'                         
-        """
-
-        properties={}
-        properties['adaptive'] = str(kwargs.pop('adaptive', True)).lower()
-        properties['duplicates'] = str(kwargs.pop('duplicates', False)).lower()
-        properties['length'] = str(kwargs.pop('length', 1))
-        kwargs['template'] = None
-
-        yield from self.generate(data_source=DataSource.EXPORT_RANDOM, properties=properties, **kwargs)
-
-    def export_static_suite(self, **kwargs):
+    def static_suite(self, **kwargs):
         """Calls generator service for pre-generated data from test suites
 
         Parameters
@@ -480,28 +358,6 @@ class TestProvider:
             See 'generate'                         
 
         """
-
-        kwargs['template'] = str(kwargs.pop('template', DEFAULT_TEMPLATE))
-
-        yield from self.generate(data_source=DataSource.EXPORT_STATIC_DATA, **kwargs)
-
-    def generate_static_suite(self, **kwargs):
-        """Calls generator service for pre-generated data from test suites
-
-        Parameters
-        ----------
-        method : str
-            See 'generate'                 
-
-        test_suites : list
-            A list of test suites that shall be requested
-
-        model : str
-            See 'generate'                         
-
-        """
-
-        kwargs['template'] = None
 
         yield from self.generate(data_source=DataSource.EXPORT_STATIC_DATA, **kwargs)
 
