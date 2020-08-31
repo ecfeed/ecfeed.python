@@ -11,9 +11,11 @@ import sys
 import importlib
 
 def __default_keystore_path():
-    if sys.platform == 'win32':
-        return path.expanduser('~/ecfeed/security.p12')
-    return path.expanduser('~/.ecfeed/security.p12')
+    keystore_paths = [path.expanduser('~/.ecfeed/security.p12'), path.expanduser('~/ecfeed/security.p12')]
+    for keystore_path in keystore_paths:
+        if path.exists(keystore_path):
+            return keystore_path
+    return keystore_path
 
 DEFAULT_GENSERVER = 'gen.ecfeed.com'
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
