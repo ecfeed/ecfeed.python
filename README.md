@@ -13,7 +13,7 @@ the generated data from python code.
 ## Requirements
 
 EcFeed library is built and tested with Python 3.6, althought it should work with earlier versions of Python 3. 
-The only dependency is pyopenssl
+It depends on pyopenssl and requests libraries.
 
 ## Installation
 
