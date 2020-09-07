@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="ecfeed", 
-    version="1.0.0b5",
+    version="2.0.0b5",
     author="EcFeed AS",
     author_email="mail@ecfeed.com",
     description="Python interface for accessing EcFeed online generator service",
