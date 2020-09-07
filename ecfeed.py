@@ -32,39 +32,40 @@ class TemplateType(Enum):
     XML = 2
     Gherkin = 3
     JSON = 4
+    RAW = 99
 
     def __str__(self):
         return self.name
 
+def parse_template(template):
+    if template == str(TemplateType.CSV): return TemplateType.CSV
+    elif template == str(TemplateType.JSON): return TemplateType.JSON
+    elif template == str(TemplateType.Gherkin): return TemplateType.Gherkin
+    elif template == str(TemplateType.XML): return TemplateType.XML
+    elif template == str(TemplateType.RAW): return TemplateType.RAW
+    return None
+
+DEFAULT_TEMPLATE = TemplateType.CSV
+
 class DataSource(Enum):
-    EXPORT_STATIC_DATA = 0
-    EXPORT_NWISE = 1
-    EXPORT_PAIRWISE = 2
-    EXPORT_CARTESIAN = 3
-    EXPORT_RANDOM = 4
-    GENERATE_STATIC_DATA = 5
-    GENERATE_NWISE = 6
-    GENERATE_PAIRWISE = 7
-    GENERATE_CARTESIAN = 8
-    GENERATE_RANDOM = 9
+    STATIC_DATA = 0
+    NWISE = 1
+    PAIRWISE = 2
+    CARTESIAN = 3
+    RANDOM = 4
 
     def __repr__(self):
         return self.to_url_param()
 
     def to_url_param(self):
-        if ((self == DataSource.EXPORT_STATIC_DATA) or \
-            (self == DataSource.GENERATE_STATIC_DATA)):
+        if self == DataSource.STATIC_DATA:
             return 'static'
-        if ((self == DataSource.EXPORT_NWISE) or \
-            (self == DataSource.EXPORT_PAIRWISE) or \
-            (self == DataSource.GENERATE_NWISE) or \
-            (self == DataSource.GENERATE_PAIRWISE)):
+        if ((self == DataSource.NWISE) or \
+            (self == DataSource.PAIRWISE)):
             return 'genNWise'
-        if ((self == DataSource.EXPORT_CARTESIAN) or \
-            (self == DataSource.GENERATE_CARTESIAN)):
+        if self == DataSource.CARTESIAN:
             return 'genCartesian'
-        if ((self == DataSource.EXPORT_RANDOM) or \
-            (self == DataSource.GENERATE_RANDOM)):
+        if self == DataSource.RANDOM:
             return 'genRandom'
 
 class TestProvider:
@@ -105,7 +106,7 @@ class TestProvider:
         
         self.genserver = genserver
         self.model = model
-        self.keystore_path = keystore_path
+        self.keystore_path = path.expanduser(keystore_path)
         self.password = password
 
     def generate(self, **kwargs):
@@ -147,11 +148,13 @@ class TestProvider:
 
         constraints : list
             List of constraints used for the generation. If not provided, all constraints 
-            will be used
+            will be used, to ignore all constraints set the value to 'NONE'
 
         template : TemplateType
             Template to be used when exporting data to text. If set to None
             data will be casted to argument type
+
+        raw_output : if set to True works the same as template = None
 
         Yields
         -------
@@ -174,12 +177,19 @@ class TestProvider:
 
         model = kwargs.pop('model', self.model)
         template = kwargs.pop('template', None)
+        raw_output = False
+        if 'raw_output' in kwargs or template == TemplateType.RAW:
+            raw_output = True
+        if template == TemplateType.RAW: 
+            template = None
+
 
         request = self.__prepare_request(genserver=self.genserver, 
                             model=model, method=method, 
                             data_source=data_source, template=template, 
                             **kwargs)
 
+        # print(f'request:{request}')
         if(kwargs.pop('url', None)):
             yield request
             return
@@ -209,7 +219,7 @@ class TestProvider:
                     line = line.decode('utf-8')
                     if template != None:
                         yield line
-                    elif 'raw_output' in kwargs and kwargs['raw_output'] == True:
+                    elif raw_output:
                         yield line
                     else:
                         test_data = self.__parse_test_line(line=line)
@@ -223,13 +233,17 @@ class TestProvider:
             remove(temp_pkey_file.name)
             remove(temp_ca_file.name)
 
-    def generate_nwise(self, **kwargs): return self.nwise(template=None, **kwargs)
+    def generate_nwise(self, **kwargs): 
+        return self.nwise(template=None, **kwargs)
 
-    def export_nwise(self, **kwargs): return self.nwise(template=str(kwargs.pop('template', DEFAULT_TEMPLATE)), **kwargs)
+    def export_nwise(self, **kwargs): 
+        return self.nwise(template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
 
-    def generate_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', 2), template=None, **kwargs)
+    def generate_pairwise(self, **kwargs): 
+        return self.nwise(n=kwargs.pop('n', 2), template=None, **kwargs)
 
-    def export_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', 2), template=str(kwargs.pop('template', DEFAULT_TEMPLATE)), **kwargs)
+    def export_pairwise(self, **kwargs): 
+        return self.nwise(n=kwargs.pop('n', 2), template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
 
     def nwise(self, **kwargs):
         """A convenient way to call nwise generator. 
@@ -264,11 +278,11 @@ class TestProvider:
         properties['coverage'] = str(kwargs.pop('coverage', 100))
         kwargs['properties'] = properties
 
-        yield from self.generate(data_source=DataSource.EXPORT_NWISE, **kwargs)
+        yield from self.generate(data_source=DataSource.NWISE, **kwargs)
 
     def generate_cartesian(self, **kwargs): return self.cartesian(template=None, **kwargs)
 
-    def export_cartesian(self, **kwargs): return self.cartesian(template=str(kwargs.pop('template', DEFAULT_TEMPLATE)), **kwargs)
+    def export_cartesian(self, **kwargs): return self.cartesian(template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
 
     def cartesian(self, **kwargs):
         """Calls cartesian generator
@@ -295,11 +309,11 @@ class TestProvider:
         properties={}
         properties['coverage'] = str(kwargs.pop('coverage', 100))
 
-        yield from self.generate(data_source=DataSource.EXPORT_CARTESIAN, **kwargs)
+        yield from self.generate(data_source=DataSource.CARTESIAN, **kwargs)
 
     def generate_random(self, **kwargs): return self.random(template=None, **kwargs)
 
-    def export_random(self, **kwargs): return self.random(template=str(kwargs.pop('template', DEFAULT_TEMPLATE)), **kwargs)
+    def export_random(self, **kwargs): return self.random(template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
 
     def random(self, **kwargs):
         """Calls random generator
@@ -334,11 +348,11 @@ class TestProvider:
         properties['duplicates'] = str(kwargs.pop('duplicates', False)).lower()
         properties['length'] = str(kwargs.pop('length', 1))
 
-        yield from self.generate(data_source=DataSource.EXPORT_RANDOM, properties=properties, **kwargs)
+        yield from self.generate(data_source=DataSource.RANDOM, properties=properties, **kwargs)
 
     def generate_static_suite(self, **kwargs): return self.static_suite(template=None, **kwargs)
 
-    def export_static_suite(self, **kwargs): return self.static_suite(template=str(kwargs.pop('template', DEFAULT_TEMPLATE)), **kwargs)
+    def export_static_suite(self, **kwargs): return self.static_suite(template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
 
     def static_suite(self, **kwargs):
         """Calls generator service for pre-generated data from test suites
@@ -359,7 +373,7 @@ class TestProvider:
 
         """
 
-        yield from self.generate(data_source=DataSource.EXPORT_STATIC_DATA, **kwargs)
+        yield from self.generate(data_source=DataSource.STATIC_DATA, **kwargs)
 
     def method_info(self, method, model=None):
         """Queries generator service for information about the method
