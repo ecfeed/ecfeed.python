@@ -79,7 +79,7 @@ def parse_arguments():
     if 'constraints' in args:
         if args['constraints'] == 'NONE':
             args['constraints'] = None
-        else:
+        elif args['constraints'] != None:
             args['constraints'] = json.loads(args['constraints'].replace('\'', '"'))
     if 'suites' in args and args['suites'] != None:
         args['suites'] = json.loads(args['suites'].replace('\'', '"'))
