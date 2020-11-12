@@ -7,6 +7,7 @@ import tempfile
 import json
 from enum import Enum
 import sys
+import time
 
 import importlib
 
@@ -80,6 +81,7 @@ class TestProvider:
     '''
 
     model = ''
+    execution_data = {}
 
     def __init__(self, genserver = DEFAULT_GENSERVER, 
                  keystore_path=DEFAULT_KEYSTORE_PATH, 
@@ -215,6 +217,16 @@ class TestProvider:
                 raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
             else:
                 args_info = {}
+
+                index_global = time.time()
+                index_local = 0
+
+                self.execution_data[index_global] = {}                          # Each method can be executed multiple times, and therefore, its name cannot be used as ID.
+                # It is for internal use, users should not be aware of this index and it does not have to be human-friendly.
+                self.execution_data[index_global]["status"] = "pending"         # We must know whether the transmission is still in progress.
+                self.execution_data[index_global]["size_total"] = 0             # At the beginning the number of received test cases is zero.
+                self.execution_data[index_global]["size_processed"] = 0         # At the beginning the number of processed test cases is zero.
+
                 for line in response.iter_lines(decode_unicode=True):
                     line = line.decode('utf-8')
                     if template != None:
@@ -226,8 +238,24 @@ class TestProvider:
                         if 'method' in test_data:
                             args_info = test_data['method']
                         if 'values' in test_data:
-                            yield  [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
+                            test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
 
+                            self.execution_data[index_global][index_local] = { "data" : test_case }         # Add a new test case.
+
+                            test_case_execution = test_case.copy()
+                            test_case_execution.append({"global" : index_global, "local" : index_local})
+
+                            index_local += 1
+
+                            yield  test_case_execution
+
+                if index_local == 0:                                                # It was a helper function without any test cases, we can end now.
+                    del self.execution_data[index_global]
+                else:
+                    self.execution_data[index_global]["size_total"] = index_local
+                    self.execution_data[index_global]["status"] = "completed"       # This code is always executed before tests are completed.
+                # TestProvider know nothing about the tests (unless we integrate the code with the testing framework, but it is not a good idea).
+                # We cannot end here, the feedback must be done in a separate thread controlled by the testing framework.
         finally:
             remove(temp_cert_file.name)
             remove(temp_pkey_file.name)
@@ -398,13 +426,17 @@ class TestProvider:
         info={}
         for line in self.generate_random(method=method, length=0, raw_output=True, model=model):
             line = line.replace('"{', '{').replace('}"', '}').replace('\'', '"')#fix wrong formatting in some versions of the gen-server
+
             try:                
                 parsed = json.loads(line)
             except ValueError as e:
                 print('Unexpected problem when getting method info: ' + str(e))
             if 'info' in parsed :
-                method_name = parsed['info']['method']
-                info = self.__parse_method_definition(method_name)
+                try:
+                    method_name = parsed['info']['method']
+                    info = self.__parse_method_definition(method_name)
+                except TypeError as e:
+                    pass
         return info
  
     def method_arg_names(self, method_info=None, method_name=None):
@@ -450,6 +482,28 @@ class TestProvider:
             return [i[0] for i in method_info['args']]
         elif method_name != None:
             return self.method_arg_types(self.method_info(method=method_name))
+
+    def method_test_header(self, method_name=None):
+        header = self.method_arg_names(method_name=method_name)
+        header.append("index")
+        return header
+
+    def feedback(self, index, status, comment=None):     
+        data = self.execution_data[index["global"]]         # The test suite should be available (we can add 'if' but maybe it would be just a boilerplate).
+
+        if status:                                          # The test was completed successfully, we can remove it from the memory (to save space).
+            del data[index["local"]]                        # The test case should be available.
+
+        data["size_processed"] += 1
+
+        # We must be sure that the transmission it completed.
+        # All tests must be reported. We cannot assume neither the execution time nor the execution order.
+        if (data["status"] == "completed") and (data["size_total"] == data["size_processed"]):
+            self.__process_test_suite_results(index["global"])
+
+    def __process_test_suite_results(self, index_global):
+        print(self.execution_data[index_global])            # Do some stuff...
+        del self.execution_data[index_global]
 
     def __prepare_request(self, method, data_source, 
                           genserver=None, 
