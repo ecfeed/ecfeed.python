@@ -240,7 +240,7 @@ class TestProvider:
                         if 'values' in test_data:
                             test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
 
-                            self.execution_data[index_global][index_local] = { "data" : test_case }         # Add a new test case.
+                            self.execution_data[index_global][index_local] = { "data" : test_case }
 
                             test_case_execution = test_case.copy()
                             test_case_execution.append({"global" : index_global, "local" : index_local})
@@ -249,7 +249,7 @@ class TestProvider:
 
                             yield  test_case_execution
 
-                if index_local == 0:                                                # It was a helper function without any test cases, we can end now.
+                if index_local == 0:                                                # It was a request without any test cases (helper), we can end now.
                     del self.execution_data[index_global]
                 else:
                     self.execution_data[index_global]["size_total"] = index_local
@@ -483,7 +483,7 @@ class TestProvider:
         elif method_name != None:
             return self.method_arg_types(self.method_info(method=method_name))
 
-    def method_test_header(self, method_name=None):
+    def test_header(self, method_name=None):
         header = self.method_arg_names(method_name=method_name)
         header.append("index")
         return header
@@ -493,6 +493,9 @@ class TestProvider:
 
         if status:                                          # The test was completed successfully, we can remove it from the memory (to save space).
             del data[index["local"]]                        # The test case should be available.
+        else:
+            if comment:
+                data[index["local"]]["comment"] = comment
 
         data["size_processed"] += 1
 
