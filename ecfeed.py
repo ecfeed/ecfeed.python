@@ -81,7 +81,6 @@ class TestProvider:
     '''
 
     model = ''
-    execution_data = {}
 
     def __init__(self, genserver = DEFAULT_GENSERVER, 
                  keystore_path=DEFAULT_KEYSTORE_PATH, 
@@ -110,6 +109,8 @@ class TestProvider:
         self.model = model
         self.keystore_path = path.expanduser(keystore_path)
         self.password = password
+        self.creation_timestamp = time.time()
+        self.execution_data = {}
 
     def generate(self, **kwargs):
         """Generic call to ecfeed generator service
@@ -179,12 +180,15 @@ class TestProvider:
 
         model = kwargs.pop('model', self.model)
         template = kwargs.pop('template', None)
+
+        feedback = kwargs.pop('feedback', False)
+        feedback_label = kwargs.pop('feedback_label', str(time.time()) if feedback else '')
+
         raw_output = False
         if 'raw_output' in kwargs or template == TemplateType.RAW:
             raw_output = True
         if template == TemplateType.RAW: 
             template = None
-
 
         request = self.__prepare_request(genserver=self.genserver, 
                             model=model, method=method, 
@@ -218,14 +222,18 @@ class TestProvider:
             else:
                 args_info = {}
 
-                index_global = time.time()
-                index_local = 0
+                if feedback:
+                    if feedback_label in self.execution_data[feedback_label]:
+                        raise NameError('The generation ID already exists')
+                self.execution_data[feedback_label] = {}
+                self.execution_data[feedback_label]["execution"] = {}
+                self.execution_data[feedback_label]["test_provider_id"] = self.creation_timestamp
+                self.execution_data[feedback_label]["method"] = method
+                self.execution_data[feedback_label]["status"] = "pending"
+                self.execution_data[feedback_label]["size_total"] = 0
+                self.execution_data[feedback_label]["size_processed"] = 0
 
-                self.execution_data[index_global] = {}                          # Each method can be executed multiple times, and therefore, its name cannot be used as ID.
-                # It is for internal use, users should not be aware of this index and it does not have to be human-friendly.
-                self.execution_data[index_global]["status"] = "pending"         # We must know whether the transmission is still in progress.
-                self.execution_data[index_global]["size_total"] = 0             # At the beginning the number of received test cases is zero.
-                self.execution_data[index_global]["size_processed"] = 0         # At the beginning the number of processed test cases is zero.
+                index_local = 0
 
                 for line in response.iter_lines(decode_unicode=True):
                     line = line.decode('utf-8')
@@ -240,22 +248,21 @@ class TestProvider:
                         if 'values' in test_data:
                             test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
 
-                            self.execution_data[index_global][index_local] = { "data" : test_case }
+                            self.execution_data[feedback_label]["execution"][index_local] = { "data" : test_case }
 
                             test_case_execution = test_case.copy()
-                            test_case_execution.append({"global" : index_global, "local" : index_local})
+                            test_case_execution.append({"label" : feedback_label, "id" : index_local})
 
                             index_local += 1
 
                             yield  test_case_execution
 
-                if index_local == 0:                                                # It was a request without any test cases (helper), we can end now.
-                    del self.execution_data[index_global]
+                if index_local == 0:
+                    del self.execution_data[feedback_label]
                 else:
-                    self.execution_data[index_global]["size_total"] = index_local
-                    self.execution_data[index_global]["status"] = "completed"       # This code is always executed before tests are completed.
-                # TestProvider know nothing about the tests (unless we integrate the code with the testing framework, but it is not a good idea).
-                # We cannot end here, the feedback must be done in a separate thread controlled by the testing framework.
+                    self.execution_data[feedback_label]["size_total"] = index_local
+                    self.execution_data[feedback_label]["status"] = "completed"
+
         finally:
             remove(temp_cert_file.name)
             remove(temp_pkey_file.name)
@@ -483,30 +490,54 @@ class TestProvider:
         elif method_name != None:
             return self.method_arg_types(self.method_info(method=method_name))
 
-    def test_header(self, method_name=None):
+    def test_header(self, method_name, feedback=False):
         header = self.method_arg_names(method_name=method_name)
-        header.append("index")
+        
+        if feedback:
+            header.append("test_id")
+
         return header
 
-    def feedback(self, index, status, comment=None):     
-        data = self.execution_data[index["global"]]         # The test suite should be available (we can add 'if' but maybe it would be just a boilerplate).
+    def feedback(self, test_id, status, comment=None):     
+        test_suite = self.execution_data[test_id["label"]]
 
-        if status:                                          # The test was completed successfully, we can remove it from the memory (to save space).
-            del data[index["local"]]                        # The test case should be available.
+        if test_id["id"] not in test_suite["execution"]:
+            return comment
+
+        test = test_suite["execution"][test_id["id"]]
+
+        if "executed" in test:
+            return comment
+
+        if status:
+            del test_suite["execution"][test_id["id"]]
         else:
+            test["executed"] = True
             if comment:
-                data[index["local"]]["comment"] = comment
+                test["comment"] = comment
 
-        data["size_processed"] += 1
+        test_suite["size_processed"] += 1
 
-        # We must be sure that the transmission it completed.
-        # All tests must be reported. We cannot assume neither the execution time nor the execution order.
-        if (data["status"] == "completed") and (data["size_total"] == data["size_processed"]):
-            self.__process_test_suite_results(index["global"])
+        if (test_suite["status"] == "completed") and (test_suite["size_total"] == test_suite["size_processed"]):
+            self.__process_test_suite_results(test_id["label"])
 
-    def __process_test_suite_results(self, index_global):
-        print(self.execution_data[index_global])            # Do some stuff...
-        del self.execution_data[index_global]
+        return comment
+
+    def __process_test_suite_results(self, feedback_label):
+        self.__process_test_suite_results_cleanup(feedback_label)
+        
+        print(self.execution_data[feedback_label])            # Do some stuff...
+        
+        del self.execution_data[feedback_label]
+
+    def __process_test_suite_results_cleanup(self, feedback_label):
+        test_suite = self.execution_data[feedback_label]
+
+        del test_suite["status"]
+        del test_suite["size_processed"]
+
+        for test in test_suite["execution"]:
+            del test_suite["execution"][test]["executed"]
 
     def __prepare_request(self, method, data_source, 
                           genserver=None, 
