@@ -112,6 +112,9 @@ class TestProvider:
         self.creation_timestamp = time.time()
         self.execution_data = {}
 
+        self.remove_passed_tests = True
+        self.keep_test_data = True
+
     def generate(self, **kwargs):
         """Generic call to ecfeed generator service
 
@@ -222,16 +225,7 @@ class TestProvider:
             else:
                 args_info = {}
 
-                if feedback:
-                    if feedback_label in self.execution_data[feedback_label]:
-                        raise NameError('The generation ID already exists')
-                self.execution_data[feedback_label] = {}
-                self.execution_data[feedback_label]["execution"] = {}
-                self.execution_data[feedback_label]["test_provider_id"] = self.creation_timestamp
-                self.execution_data[feedback_label]["method"] = method
-                self.execution_data[feedback_label]["status"] = "pending"
-                self.execution_data[feedback_label]["size_total"] = 0
-                self.execution_data[feedback_label]["size_processed"] = 0
+                self._add_feedback(feedback, feedback_label, method)
 
                 index_local = 0
 
@@ -248,25 +242,55 @@ class TestProvider:
                         if 'values' in test_data:
                             test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
 
-                            self.execution_data[feedback_label]["execution"][index_local] = { "data" : test_case }
+                            self._build_feedback(feedback, [feedback_label, "execution", index_local, "data"], test_case.copy(), condition=self.keep_test_data)
+                            self._build_feedback(feedback, [feedback_label, "execution", index_local, "time"], time.time())
 
-                            test_case_execution = test_case.copy()
-                            test_case_execution.append({"label" : feedback_label, "id" : index_local})
+                            test_case.append({"label" : feedback_label, "id" : index_local })
 
                             index_local += 1
 
-                            yield  test_case_execution
+                            print("yield")
+                            time.sleep(1)
+                            yield  test_case
 
-                if index_local == 0:
-                    del self.execution_data[feedback_label]
-                else:
-                    self.execution_data[feedback_label]["size_total"] = index_local
-                    self.execution_data[feedback_label]["status"] = "completed"
+                self._build_feedback(feedback, [feedback_label, "size_total"], index_local)
+                self._build_feedback(feedback, [feedback_label, "status"], "completed")
 
         finally:
             remove(temp_cert_file.name)
             remove(temp_pkey_file.name)
             remove(temp_ca_file.name)
+
+    def _add_feedback(self, feedback, feedback_label, method):
+
+        if not feedback:
+            return
+        
+        if feedback_label in self.execution_data:
+            raise NameError('The generation ID already exists')
+
+        self.execution_data[feedback_label] = {}
+        self.execution_data[feedback_label]["execution"] = {}
+        self.execution_data[feedback_label]["test_provider_id"] = self.creation_timestamp
+        self.execution_data[feedback_label]["method"] = method
+        self.execution_data[feedback_label]["status"] = "pending"
+        self.execution_data[feedback_label]["size_total"] = 0
+        self.execution_data[feedback_label]["size_processed"] = 0
+        self.execution_data[feedback_label]["size_passed"] = 0
+
+    def _build_feedback(self, feedback, path, element, condition=True):
+
+        if (not feedback) and (not condition):
+            return
+
+        index = self.execution_data
+
+        for i in range(len(path) - 1):
+            if path[i] not in index:
+                index[path[i]] = {}
+            index = index[path[i]]
+
+        index[path[-1]] = element
 
     def generate_nwise(self, **kwargs): 
         return self.nwise(template=None, **kwargs)
@@ -431,7 +455,7 @@ class TestProvider:
         """
 
         info={}
-        for line in self.generate_random(method=method, length=0, raw_output=True, model=model):
+        for line in self.generate_random(method=method, length=0, raw_output=True, model=model, feedback=False):
             line = line.replace('"{', '{').replace('}"', '}').replace('\'', '"')#fix wrong formatting in some versions of the gen-server
 
             try:                
@@ -499,6 +523,12 @@ class TestProvider:
         return header
 
     def feedback(self, test_id, status, comment=None):     
+
+        print("feedback")
+        
+        if test_id["label"] not in self.execution_data:
+            return
+
         test_suite = self.execution_data[test_id["label"]]
 
         if test_id["id"] not in test_suite["execution"]:
@@ -506,15 +536,19 @@ class TestProvider:
 
         test = test_suite["execution"][test_id["id"]]
 
-        if "executed" in test:
+        if "passed" in test:
             return comment
 
-        if status:
+        if status and self.remove_passed_tests:
             del test_suite["execution"][test_id["id"]]
         else:
-            test["executed"] = True
+            test["passed"] = status
+            test["time"] = time.time() - test["time"]
             if comment:
                 test["comment"] = comment
+        
+        if status:
+            test_suite["size_passed"] += 1
 
         test_suite["size_processed"] += 1
 
@@ -536,8 +570,8 @@ class TestProvider:
         del test_suite["status"]
         del test_suite["size_processed"]
 
-        for test in test_suite["execution"]:
-            del test_suite["execution"][test]["executed"]
+        # for test in test_suite["execution"]:
+        #     del test_suite["execution"][test]["passed"]
 
     def __prepare_request(self, method, data_source, 
                           genserver=None, 
