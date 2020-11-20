@@ -218,7 +218,8 @@ class TestProvider:
             temp_ca_file.write(ca)
 
         try:
-            response = requests.get(request, verify=temp_ca_file.name, cert=(temp_cert_file.name, temp_pkey_file.name), stream=True)
+            # response = requests.get(request, verify=temp_ca_file.name, cert=(temp_cert_file.name, temp_pkey_file.name), stream=True)
+            response = requests.get(request, verify=False, cert=(temp_cert_file.name, temp_pkey_file.name), stream=True)
             if(response.status_code != 200):
                 print('Error: ' + str(response.status_code))
                 raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
@@ -231,6 +232,7 @@ class TestProvider:
 
                 for line in response.iter_lines(decode_unicode=True):
                     line = line.decode('utf-8')
+
                     if template != None:
                         yield line
                     elif raw_output:
@@ -250,7 +252,6 @@ class TestProvider:
                             index_local += 1
 
                             print("yield")
-                            time.sleep(1)
                             yield  test_case
 
                 self._build_feedback(feedback, [feedback_label, "size_total"], index_local)
@@ -522,25 +523,36 @@ class TestProvider:
 
         return header
 
+    def next(self, generator):
+        data = next(generator)
+
+        result = {}
+        result["test_id"] = data[len(data)-1]
+
+        for i in range(len(data)-1):
+            result["arg" + str(i)] = data[i] 
+
+        return result
+
     def feedback(self, test_id, status, comment=None):     
 
         print("feedback")
         
-        if test_id["label"] not in self.execution_data:
+        if test_id["test_id"]["label"] not in self.execution_data:
             return
 
-        test_suite = self.execution_data[test_id["label"]]
+        test_suite = self.execution_data[test_id["test_id"]["label"]]
 
-        if test_id["id"] not in test_suite["execution"]:
+        if test_id["test_id"]["id"] not in test_suite["execution"]:
             return comment
 
-        test = test_suite["execution"][test_id["id"]]
+        test = test_suite["execution"][test_id["test_id"]["id"]]
 
         if "passed" in test:
             return comment
 
         if status and self.remove_passed_tests:
-            del test_suite["execution"][test_id["id"]]
+            del test_suite["execution"][test_id["test_id"]["id"]]
         else:
             test["passed"] = status
             test["time"] = time.time() - test["time"]
@@ -551,9 +563,9 @@ class TestProvider:
             test_suite["size_passed"] += 1
 
         test_suite["size_processed"] += 1
-
+        print(test_suite["status"], test_suite["size_total"], test_suite["size_processed"])
         if (test_suite["status"] == "completed") and (test_suite["size_total"] == test_suite["size_processed"]):
-            self.__process_test_suite_results(test_id["label"])
+            self.__process_test_suite_results(test_id["test_id"]["label"])
 
         return comment
 
@@ -589,13 +601,16 @@ class TestProvider:
         generate_params['model'] = model
         generate_params['userData'] = self.__serialize_user_data(data_source=data_source, **user_data)
         
+        # request_type='requestData'
         request_type='requestData'
         if template != None:
             generate_params['template'] = str(template)
             request_type='requestExport'
 
-        request = 'https://' + genserver + '/testCaseService?requestType=' + request_type + '&client=python' + '&request='
+        # request = 'https://' + genserver + '/testCaseService?requestType=' + request_type + '&client=python' + '&request='
+        request = 'https://localhost:8090/testCaseService?requestType=' + request_type + '&client=python' + '&request='
         request += json.dumps(generate_params).replace(' ', '')
+
         return request
 
     def __parse_test_line(self, line):
