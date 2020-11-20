@@ -17,8 +17,8 @@ import random
 ecfeed = TestProvider(model='YVJ1-N3H8-MHI4-1TZG-DJIY')
 generator = ecfeed.generate_random(method='QuickStart.test', length=10, feedback=True)
 
-@pytest.mark.parametrize('whatever', range(15))
-def test_one(whatever):
+@pytest.mark.parametrize('index', range(15))
+def test_one(index):
     test = ecfeed.next(generator)
     assert random.random() < 0.5, ecfeed.feedback(test, False)
     ecfeed.feedback(test, True)

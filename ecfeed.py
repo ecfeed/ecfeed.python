@@ -233,6 +233,11 @@ class TestProvider:
                 for line in response.iter_lines(decode_unicode=True):
                     line = line.decode('utf-8')
 
+                    if "END_CHUNK" in line:
+                        pass
+                    if "END_DATA" in line:
+                        pass
+
                     if template != None:
                         yield line
                     elif raw_output:
@@ -251,11 +256,7 @@ class TestProvider:
 
                             index_local += 1
 
-                            print("yield")
                             yield  test_case
-
-                self._build_feedback(feedback, [feedback_label, "size_total"], index_local)
-                self._build_feedback(feedback, [feedback_label, "status"], "completed")
 
         finally:
             remove(temp_cert_file.name)
@@ -274,9 +275,7 @@ class TestProvider:
         self.execution_data[feedback_label]["execution"] = {}
         self.execution_data[feedback_label]["test_provider_id"] = self.creation_timestamp
         self.execution_data[feedback_label]["method"] = method
-        self.execution_data[feedback_label]["status"] = "pending"
         self.execution_data[feedback_label]["size_total"] = 0
-        self.execution_data[feedback_label]["size_processed"] = 0
         self.execution_data[feedback_label]["size_passed"] = 0
 
     def _build_feedback(self, feedback, path, element, condition=True):
@@ -524,7 +523,11 @@ class TestProvider:
         return header
 
     def next(self, generator):
-        data = next(generator)
+        
+        try:
+            data = next(generator)
+        except:
+            self.__process_test_suite_results(feedback_label)
 
         result = {}
         result["test_id"] = data[len(data)-1]
@@ -562,10 +565,7 @@ class TestProvider:
         if status:
             test_suite["size_passed"] += 1
 
-        test_suite["size_processed"] += 1
-        print(test_suite["status"], test_suite["size_total"], test_suite["size_processed"])
-        if (test_suite["status"] == "completed") and (test_suite["size_total"] == test_suite["size_processed"]):
-            self.__process_test_suite_results(test_id["test_id"]["label"])
+        test_suite["size_total"] += 1
 
         return comment
 
@@ -578,9 +578,6 @@ class TestProvider:
 
     def __process_test_suite_results_cleanup(self, feedback_label):
         test_suite = self.execution_data[feedback_label]
-
-        del test_suite["status"]
-        del test_suite["size_processed"]
 
         # for test in test_suite["execution"]:
         #     del test_suite["execution"][test]["passed"]
