@@ -18,9 +18,11 @@ def __default_keystore_path():
             return keystore_path
     return keystore_path
 
-DEFAULT_GENSERVER = 'gen.ecfeed.com'
+DEFAULT_GENSERVER = 'https://localhost:8090' 
+#'gen.ecfeed.com'
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
 DEFAULT_KEYSTORE_PASSWORD = 'changeit'
+CHUNK_ITERATIONS_MAX = 2
 
 class EcFeedError(Exception):
     pass
@@ -194,11 +196,10 @@ class TestProvider:
             template = None
 
         request = self.__prepare_request(genserver=self.genserver, 
-                            model=model, method=method, 
-                            data_source=data_source, template=template, 
+                            model=model, method=method, generation_id=feedback_label,
+                            data_source=data_source, template=template,
                             **kwargs)
 
-        # print(f'request:{request}')
         if(kwargs.pop('url', None)):
             yield request
             return
@@ -218,32 +219,26 @@ class TestProvider:
             temp_ca_file.write(ca)
 
         try:
-            # response = requests.get(request, verify=temp_ca_file.name, cert=(temp_cert_file.name, temp_pkey_file.name), stream=True)
-            response = requests.get(request, verify=False, cert=(temp_cert_file.name, temp_pkey_file.name), stream=True)
-            if(response.status_code != 200):
-                print('Error: ' + str(response.status_code))
-                raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
-            else:
-                args_info = {}
+            response = self._process_request(request, False, temp_cert_file.name, temp_pkey_file.name) # verify = temp_ca_file.name
 
+            data_loop = True
+            chunk_iterations = 0
+            message = ''
+
+            while data_loop:
+                args_info = {}
+                index_local = 0
+                
                 self._add_feedback(feedback, feedback_label, method)
 
-                index_local = 0
-
                 for line in response.iter_lines(decode_unicode=True):
-                    line = line.decode('utf-8')
+                    message = line.decode('utf-8')
 
-                    if "END_CHUNK" in line:
-                        pass
-                    if "END_DATA" in line:
-                        pass
-
-                    if template != None:
-                        yield line
-                    elif raw_output:
-                        yield line
+                    if (template != None) or raw_output:
+                        yield message
                     else:
-                        test_data = self.__parse_test_line(line=line)
+                        test_data = self.__parse_test_line(line=message)
+                        
                         if 'method' in test_data:
                             args_info = test_data['method']
                         if 'values' in test_data:
@@ -256,13 +251,40 @@ class TestProvider:
 
                             index_local += 1
 
-                            yield  test_case
+                            yield test_case
+                        
+             #   yield "end"
+                test_feedback = self.__process_test_suite_results(feedback_label)
+
+                if "END_CHUNK" in message:
+                    chunk_iterations += 1   
+                    request = self.__prepare_request(genserver=self.genserver, 
+                                                     model=model, method=method, 
+                                                     type="requestUpdate" if (chunk_iterations == CHUNK_ITERATIONS_MAX) else "requestChunk", 
+                                                     generation_id=feedback_label, feedback=test_feedback,
+                                                     data_source=data_source, template=template, **kwargs)
+                    response = self._process_request(request, False, temp_cert_file.name, temp_pkey_file.name)
+                if "END_DATA" in message:
+                    data_loop = False
 
         finally:
-            remove(temp_cert_file.name)
-            remove(temp_pkey_file.name)
-            remove(temp_ca_file.name)
+            self._close_connection(temp_ca_file.name, temp_cert_file.name, temp_pkey_file.name)
 
+    def _process_request(self, request, cert_server, cert_client, private_key):
+        response = requests.get(request, verify=cert_server, cert=(cert_client, private_key), stream=True)
+        
+        if(response.status_code != 200):
+            print('Error: ' + str(response.status_code))
+            raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
+        
+        return response
+    
+    def _close_connection(self, cert_server, cert_client, private_key):
+
+        remove(cert_server)
+        remove(cert_client)
+        remove(private_key)
+        
     def _add_feedback(self, feedback, feedback_label, method):
 
         if not feedback:
@@ -524,22 +546,20 @@ class TestProvider:
 
     def next(self, generator):
         
-        try:
-            data = next(generator)
-        except:
-            self.__process_test_suite_results(feedback_label)
+        data = next(generator)                      # Collect data from the generator.
+
+        if data == "end":                           # The transmission has ended.
+            raise Exception("CHUNK END")            # We don't process the last (dummy) test.
 
         result = {}
         result["test_id"] = data[len(data)-1]
 
-        for i in range(len(data)-1):
+        for i in range(len(data)-1):                # Inject arguments.
             result["arg" + str(i)] = data[i] 
 
         return result
 
     def feedback(self, test_id, status, comment=None):     
-
-        print("feedback")
         
         if test_id["test_id"]["label"] not in self.execution_data:
             return
@@ -570,22 +590,21 @@ class TestProvider:
         return comment
 
     def __process_test_suite_results(self, feedback_label):
-        self.__process_test_suite_results_cleanup(feedback_label)
         
-        print(self.execution_data[feedback_label])            # Do some stuff...
-        
+        data = self.execution_data[feedback_label].copy()
+
         del self.execution_data[feedback_label]
 
-    def __process_test_suite_results_cleanup(self, feedback_label):
-        test_suite = self.execution_data[feedback_label]
+        return data
 
-        # for test in test_suite["execution"]:
-        #     del test_suite["execution"][test]["passed"]
-
-    def __prepare_request(self, method, data_source, 
+    def __prepare_request(self, method, data_source,
+                          type = "requestData",
                           genserver=None, 
                           model=None,
-                          template=None, **user_data) -> str:
+                          template=None,
+                          generation_id=None,
+                          feedback=None, 
+                          **user_data) -> str:
                           
         if genserver == None:
             genserver = self.genserver
@@ -598,14 +617,20 @@ class TestProvider:
         generate_params['model'] = model
         generate_params['userData'] = self.__serialize_user_data(data_source=data_source, **user_data)
         
-        # request_type='requestData'
-        request_type='requestData'
+        request_type=type
         if template != None:
             generate_params['template'] = str(template)
             request_type='requestExport'
+        
+        request = 'https://localhost:8090/testCaseService?requestType=' + request_type + '&client=python'
+        
+        if generation_id is not None:
+            request += '&generationID=' + str(generation_id)
 
-        # request = 'https://' + genserver + '/testCaseService?requestType=' + request_type + '&client=python' + '&request='
-        request = 'https://localhost:8090/testCaseService?requestType=' + request_type + '&client=python' + '&request='
+        if feedback is not None:
+            request += '&feedback=' + str(feedback)
+        
+        request += '&request='
         request += json.dumps(generate_params).replace(' ', '')
 
         return request

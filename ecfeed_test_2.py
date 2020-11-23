@@ -5,6 +5,7 @@ import sys
 import os
 import json
 import random
+import time
 
 # ecfeed = TestProvider(model='2057-8093-8471-3697-1154')
 # method = 'com.example.test.TestClass2.testMethod2'
@@ -15,11 +16,12 @@ import random
 #     ecfeed.feedback(test_id, True)
 
 ecfeed = TestProvider(model='YVJ1-N3H8-MHI4-1TZG-DJIY')
-generator = ecfeed.generate_random(method='QuickStart.test', length=10, feedback=True)
+generator = ecfeed.generate_random(method='QuickStart.test', length=5, feedback=True)
 
-@pytest.mark.parametrize('index', range(15))
+@pytest.mark.parametrize('index', range(20))
 def test_one(index):
     test = ecfeed.next(generator)
+    # time.sleep(1)
     assert random.random() < 0.5, ecfeed.feedback(test, False)
     ecfeed.feedback(test, True)
 
