@@ -22,7 +22,7 @@ DEFAULT_GENSERVER = 'https://localhost:8090'
 #'gen.ecfeed.com'
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
 DEFAULT_KEYSTORE_PASSWORD = 'changeit'
-CHUNK_ITERATIONS_MAX = 2
+CHUNK_ITERATIONS_MAX = 3
 
 class EcFeedError(Exception):
     pass
@@ -195,8 +195,10 @@ class TestProvider:
         if template == TemplateType.RAW: 
             template = None
 
+        print(template)
+
         request = self.__prepare_request(genserver=self.genserver, 
-                            model=model, method=method, generation_id=feedback_label,
+                            model=model, method=method, generation_id=feedback_label if feedback else "",
                             data_source=data_source, template=template,
                             **kwargs)
 
@@ -253,15 +255,14 @@ class TestProvider:
 
                             yield test_case
                         
-             #   yield "end"
-                test_feedback = self.__process_test_suite_results(feedback_label)
+                feedback_data = self.__process_test_suite_results(feedback, feedback_label)
 
                 if "END_CHUNK" in message:
                     chunk_iterations += 1   
                     request = self.__prepare_request(genserver=self.genserver, 
                                                      model=model, method=method, 
                                                      type="requestUpdate" if (chunk_iterations == CHUNK_ITERATIONS_MAX) else "requestChunk", 
-                                                     generation_id=feedback_label, feedback=test_feedback,
+                                                     generation_id=feedback_label, feedback=feedback_data,
                                                      data_source=data_source, template=template, **kwargs)
                     response = self._process_request(request, False, temp_cert_file.name, temp_pkey_file.name)
                 if "END_DATA" in message:
@@ -546,21 +547,21 @@ class TestProvider:
 
     def next(self, generator):
         
-        data = next(generator)                      # Collect data from the generator.
-
-        if data == "end":                           # The transmission has ended.
-            raise Exception("CHUNK END")            # We don't process the last (dummy) test.
+        data = next(generator)
 
         result = {}
         result["test_id"] = data[len(data)-1]
 
-        for i in range(len(data)-1):                # Inject arguments.
+        for i in range(len(data)-1):
             result["arg" + str(i)] = data[i] 
 
         return result
 
     def feedback(self, test_id, status, comment=None):     
         
+        if test_id["test_id"]["label"] == "":
+            return
+
         if test_id["test_id"]["label"] not in self.execution_data:
             return
 
@@ -589,7 +590,10 @@ class TestProvider:
 
         return comment
 
-    def __process_test_suite_results(self, feedback_label):
+    def __process_test_suite_results(self, feedback, feedback_label):
+
+        if not feedback:
+            return ""
         
         data = self.execution_data[feedback_label].copy()
 

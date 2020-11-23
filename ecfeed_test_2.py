@@ -15,6 +15,9 @@ import time
 #     assert random.random() < 0.5, ecfeed.feedback(test_id, False)
 #     ecfeed.feedback(test_id, True)
 
+
+# ---------------------------------------------------------
+
 ecfeed = TestProvider(model='YVJ1-N3H8-MHI4-1TZG-DJIY')
 generator = ecfeed.generate_random(method='QuickStart.test', length=5, feedback=True)
 
@@ -22,7 +25,9 @@ generator = ecfeed.generate_random(method='QuickStart.test', length=5, feedback=
 def test_one(index):
     test = ecfeed.next(generator)
     # time.sleep(1)
-    assert random.random() < 0.5, ecfeed.feedback(test, False)
+    assert random.random() < 1, ecfeed.feedback(test, False)
     ecfeed.feedback(test, True)
+
+# ---------------------------------------------------------
 
 # python3 ecfeed_cli.py --model="2057-8093-8471-3697-1154" --method="com.example.test.TestClass2.testMethod2" --generate_pairwise --template="JSON"
