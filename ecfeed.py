@@ -22,7 +22,6 @@ DEFAULT_GENSERVER = 'https://localhost:8090'
 #'gen.ecfeed.com'
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
 DEFAULT_KEYSTORE_PASSWORD = 'changeit'
-CHUNK_ITERATIONS_MAX = 3
 
 class EcFeedError(Exception):
     pass
@@ -188,14 +187,13 @@ class TestProvider:
 
         feedback = kwargs.pop('feedback', False)
         feedback_label = kwargs.pop('feedback_label', str(time.time()) if feedback else '')
+        chunk_iterations_max = kwargs.pop('chunks', 1)
 
         raw_output = False
         if 'raw_output' in kwargs or template == TemplateType.RAW:
             raw_output = True
         if template == TemplateType.RAW: 
             template = None
-
-        print(template)
 
         request = self.__prepare_request(genserver=self.genserver, 
                             model=model, method=method, generation_id=feedback_label if feedback else "",
@@ -221,17 +219,17 @@ class TestProvider:
             temp_ca_file.write(ca)
 
         try:
-            response = self._process_request(request, False, temp_cert_file.name, temp_pkey_file.name) # verify = temp_ca_file.name
+            response = self.__process_request(request, False, temp_cert_file.name, temp_pkey_file.name) # verify = temp_ca_file.name
 
-            data_loop = True
             chunk_iterations = 0
+            data_loop = True
             message = ''
 
             while data_loop:
                 args_info = {}
                 index_local = 0
                 
-                self._add_feedback(feedback, feedback_label, method)
+                self.__feedback_set_up(feedback, feedback_label, method)
 
                 for line in response.iter_lines(decode_unicode=True):
                     message = line.decode('utf-8')
@@ -246,8 +244,8 @@ class TestProvider:
                         if 'values' in test_data:
                             test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
 
-                            self._build_feedback(feedback, [feedback_label, "execution", index_local, "data"], test_case.copy(), condition=self.keep_test_data)
-                            self._build_feedback(feedback, [feedback_label, "execution", index_local, "time"], time.time())
+                            self.__feedback_append(feedback, [feedback_label, "execution", index_local, "data"], test_case.copy(), condition=self.keep_test_data)
+                            self.__feedback_append(feedback, [feedback_label, "execution", index_local, "time"], time.time())
 
                             test_case.append({"label" : feedback_label, "id" : index_local })
 
@@ -255,23 +253,23 @@ class TestProvider:
 
                             yield test_case
                         
-                feedback_data = self.__process_test_suite_results(feedback, feedback_label)
+                feedback_data = self.__feedback_process(feedback, feedback_label)
 
                 if "END_CHUNK" in message:
                     chunk_iterations += 1   
                     request = self.__prepare_request(genserver=self.genserver, 
                                                      model=model, method=method, 
-                                                     type="requestUpdate" if (chunk_iterations == CHUNK_ITERATIONS_MAX) else "requestChunk", 
+                                                     type="requestUpdate" if (chunk_iterations == chunk_iterations_max) else "requestChunk", 
                                                      generation_id=feedback_label, feedback=feedback_data,
                                                      data_source=data_source, template=template, **kwargs)
-                    response = self._process_request(request, False, temp_cert_file.name, temp_pkey_file.name)
+                    response = self.__process_request(request, False, temp_cert_file.name, temp_pkey_file.name)
                 if "END_DATA" in message:
                     data_loop = False
 
         finally:
-            self._close_connection(temp_ca_file.name, temp_cert_file.name, temp_pkey_file.name)
+            self.__close_connection(temp_ca_file.name, temp_cert_file.name, temp_pkey_file.name)
 
-    def _process_request(self, request, cert_server, cert_client, private_key):
+    def __process_request(self, request, cert_server, cert_client, private_key):
         response = requests.get(request, verify=cert_server, cert=(cert_client, private_key), stream=True)
         
         if(response.status_code != 200):
@@ -280,13 +278,13 @@ class TestProvider:
         
         return response
     
-    def _close_connection(self, cert_server, cert_client, private_key):
+    def __close_connection(self, cert_server, cert_client, private_key):
 
         remove(cert_server)
         remove(cert_client)
         remove(private_key)
         
-    def _add_feedback(self, feedback, feedback_label, method):
+    def __feedback_set_up(self, feedback, feedback_label, method):
 
         if not feedback:
             return
@@ -301,7 +299,7 @@ class TestProvider:
         self.execution_data[feedback_label]["size_total"] = 0
         self.execution_data[feedback_label]["size_passed"] = 0
 
-    def _build_feedback(self, feedback, path, element, condition=True):
+    def __feedback_append(self, feedback, path, element, condition=True):
 
         if (not feedback) and (not condition):
             return
@@ -314,6 +312,17 @@ class TestProvider:
             index = index[path[i]]
 
         index[path[-1]] = element
+
+    def __feedback_process(self, feedback, feedback_label):
+
+        if not feedback:
+            return ""
+        
+        data = self.execution_data[feedback_label].copy()
+
+        del self.execution_data[feedback_label]
+
+        return data
 
     def generate_nwise(self, **kwargs): 
         return self.nwise(template=None, **kwargs)
@@ -547,7 +556,10 @@ class TestProvider:
 
     def next(self, generator):
         
-        data = next(generator)
+        try:
+            data = next(generator)
+        except StopIteration:
+            return None
 
         result = {}
         result["test_id"] = data[len(data)-1]
@@ -559,24 +571,26 @@ class TestProvider:
 
     def feedback(self, test_id, status, comment=None):     
         
-        if test_id["test_id"]["label"] == "":
+        parsed = test_id["test_id"] if "test_id" in test_id else test_id
+
+        if parsed["label"] == "":
             return
 
-        if test_id["test_id"]["label"] not in self.execution_data:
+        if parsed["label"] not in self.execution_data:
             return
 
-        test_suite = self.execution_data[test_id["test_id"]["label"]]
+        test_suite = self.execution_data[parsed["label"]]
 
-        if test_id["test_id"]["id"] not in test_suite["execution"]:
+        if parsed["id"] not in test_suite["execution"]:
             return comment
 
-        test = test_suite["execution"][test_id["test_id"]["id"]]
+        test = test_suite["execution"][parsed["id"]]
 
         if "passed" in test:
             return comment
 
         if status and self.remove_passed_tests:
-            del test_suite["execution"][test_id["test_id"]["id"]]
+            del test_suite["execution"][parsed["id"]]
         else:
             test["passed"] = status
             test["time"] = time.time() - test["time"]
@@ -589,17 +603,6 @@ class TestProvider:
         test_suite["size_total"] += 1
 
         return comment
-
-    def __process_test_suite_results(self, feedback, feedback_label):
-
-        if not feedback:
-            return ""
-        
-        data = self.execution_data[feedback_label].copy()
-
-        del self.execution_data[feedback_label]
-
-        return data
 
     def __prepare_request(self, method, data_source,
                           type = "requestData",
