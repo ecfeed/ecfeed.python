@@ -302,7 +302,6 @@ class TestProvider:
         self.execution_data[feedback_id] = {}
         self.execution_data[feedback_id]["execution"] = {}                          # Executed test cases.
         self.execution_data[feedback_id]["id_provider"] = self.creation_timestamp   # Identification.
-        self.execution_data[feedback_id]["id_generation"] = feedback_id             # Identification.
         self.execution_data[feedback_id]["model"] = model                           # Since we don't use this parameter in the feedback request, it should be added here.
         self.execution_data[feedback_id]["method"] = method                         # Since we don't use this parameter in the feedback request, it should be added here.
         self.execution_data[feedback_id]["size_total"] = 0                          # The total number of tests (not needed for dynamic tests).
