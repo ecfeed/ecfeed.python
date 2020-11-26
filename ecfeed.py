@@ -217,27 +217,30 @@ class TestProvider:
                 
             for line in response.iter_lines(decode_unicode=True):
                 line = line.decode('utf-8')
-                
-                if (template != None) or raw_output:
-                    print(line)
-                    yield [str(line), "lol"]
+                test_case = None
+
+                if ((template != None) or raw_output) and (feedback_id is None):
+                    yield line                  # Just return the data, it should not be processed.
+                elif ((template != None) or raw_output):
+                    test_case = [str(line)]
                 else:
-                    test_data = self.__parse_test_line(line=line)
+                    test_data = self.__parse_test_line(line=line) 
                         
                     if 'method' in test_data:
                         args_info = test_data['method']
                     if 'values' in test_data:
                         test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
+                
+                if test_case is not None:
+                    self.__feedback_append(feedback_id, ["execution", test_index, "data"], test_case.copy(), condition=self.include_test_data)
 
-                        self.__feedback_append(feedback_id, ["execution", test_index, "data"], test_case.copy(), condition=self.include_test_data)
+                    # If feedback is expected, one additional argument must be added to test methods.
+                    if (feedback_id is not None):
+                        test_case.append({"label" : feedback_id, "id" : test_index })
 
-                        # If feedback is expected, one additional argument must be added to test methods.
-                        if (feedback_id is not None):
-                            test_case.append({"label" : feedback_id, "id" : test_index })
+                    test_index += 1
 
-                        test_index += 1
-
-                        yield test_case
+                    yield test_case
                             
             # The number of tests must be known a priori (it is not the case with dynamic tests or adaptive generators).
             self.__feedback_append(feedback_id, ["size_total"], test_index)
