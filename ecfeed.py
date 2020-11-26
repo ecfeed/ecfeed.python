@@ -18,8 +18,7 @@ def __default_keystore_path():
             return keystore_path
     return keystore_path
 
-DEFAULT_GENSERVER = 'https://localhost:8090' 
-#'gen.ecfeed.com'
+DEFAULT_GENSERVER = 'https://localhost:8090' # gen.ecfeed.com
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
 DEFAULT_KEYSTORE_PASSWORD = 'changeit'
 
@@ -83,7 +82,7 @@ class TestProvider:
 
     model = ''
 
-    def __init__(self, genserver = DEFAULT_GENSERVER, 
+    def __init__(self, genserver=DEFAULT_GENSERVER, 
                  keystore_path=DEFAULT_KEYSTORE_PATH, 
                  password=DEFAULT_KEYSTORE_PASSWORD,
                  model=None):
@@ -105,16 +104,18 @@ class TestProvider:
             id of the default model used by generators
 
         '''
-        
-        self.genserver = genserver
+        # The generation server is one of the connection parameters which should be associated with the TestProvider (the connection parameter can be verified in the constructor).
+        # I don't see any use case when it is changed during the generation process. To do it, a separate TestProvider could be created, it is a very light-weight object.
+        self.genserver = genserver      
         self.model = model
         self.keystore_path = path.expanduser(keystore_path)
         self.password = password
-        self.creation_timestamp = time.time()
+        # Convert to [us]. It should be unique for each generations, integers are easier to handle.
+        self.creation_timestamp = int(time.time() * 1000000)        
         self.execution_data = {}
-
-        self.remove_passed_tests = True
-        self.keep_test_data = True
+        # Flags for development.
+        self.include_failed_tests_only = True
+        self.include_test_data = True
 
     def generate(self, **kwargs):
         """Generic call to ecfeed generator service
@@ -185,9 +186,8 @@ class TestProvider:
         model = kwargs.pop('model', self.model)
         template = kwargs.pop('template', None)
 
-        feedback = kwargs.pop('feedback', False)
-        feedback_label = kwargs.pop('feedback_label', str(time.time()) if feedback else '')
-        chunk_iterations_max = kwargs.pop('chunks', 1)
+        feedback_flag = kwargs.pop('feedback', False)                                   # The flag is only used once, the code is more readable that way/
+        feedback_id = int(time.time() * 1000000) if feedback_flag == True else None     # If there is no ID, the feedback is not wanted, simple as that.
 
         raw_output = False
         if 'raw_output' in kwargs or template == TemplateType.RAW:
@@ -195,116 +195,125 @@ class TestProvider:
         if template == TemplateType.RAW: 
             template = None
 
-        request = self.__prepare_request(genserver=self.genserver, 
-                            model=model, method=method, generation_id=feedback_label if feedback else "",
-                            data_source=data_source, template=template,
-                            **kwargs)
+        request = self.__prepare_request(model=model, method=method, feedback_id=feedback_id, data_source=data_source, template=template, **kwargs)
 
         if(kwargs.pop('url', None)):
             yield request
             return
 
+        # Handling certificates is a single, well defined task, it should be in a method.
+        cert = self.__certificate_load()
+
+        try:
+            # We send requests more than once, a separate method is useful.
+            response = self.__process_request(request, cert)
+            # Spring does not handle well bidirectional streams, and therefore, we should rely on the chunked response (read only).
+            # Even more, we cannot keep the stream in the main loop (the test framework would freeze).
+            # Here, we must provide all data needed to perform the final (feedback) request. 
+            self.__feedback_set_up(feedback_id, model, method, cert)
+
+            args_info = {}
+            test_index = 0
+                
+            for line in response.iter_lines(decode_unicode=True):
+                line = line.decode('utf-8')
+                
+                if (template != None) or raw_output:
+                    print(line)
+                    yield [str(line), "lol"]
+                else:
+                    test_data = self.__parse_test_line(line=line)
+                        
+                    if 'method' in test_data:
+                        args_info = test_data['method']
+                    if 'values' in test_data:
+                        test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
+
+                        self.__feedback_append(feedback_id, ["execution", test_index, "data"], test_case.copy(), condition=self.include_test_data)
+
+                        # If feedback is expected, one additional argument must be added to test methods.
+                        if (feedback_id is not None):
+                            test_case.append({"label" : feedback_id, "id" : test_index })
+
+                        test_index += 1
+
+                        yield test_case
+                            
+            # The number of tests must be known a priori (it is not the case with dynamic tests or adaptive generators).
+            self.__feedback_append(feedback_id, ["size_total"], test_index)
+            self.__feedback_append(feedback_id, ["timestamp"], time.time())
+
+        except:
+            # We cannot remove certificates with the 'finally' keyword, more requests are pending (e.g. in feedback).
+            # However, if something goes wrong, it brakes the execution anyway.
+            self.__certificate_remove(cert)
+            
+    # Certificates should be associated with the TestProvider class and not with the generation method.
+    # However, due to the lack of destructors and the fact that requests can be executed in parallel, they may pollute the filesystem.
+    def __certificate_load(self):
         with open(self.keystore_path, 'rb') as keystore_file:
             keystore = crypto.load_pkcs12(keystore_file.read(), self.password.encode('utf8'))
 
+        server = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_ca_certificates()[0])
+        client = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_certificate())
         key = crypto.dump_privatekey(crypto.FILETYPE_PEM, keystore.get_privatekey())      
-        cert = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_certificate())
-        ca = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_ca_certificates()[0])
 
-        with tempfile.NamedTemporaryFile(delete=False) as temp_cert_file: 
-            temp_cert_file.write(cert)
-        with tempfile.NamedTemporaryFile(delete=False) as temp_pkey_file: 
-            temp_pkey_file.write(key)
-        with tempfile.NamedTemporaryFile(delete=False) as temp_ca_file:
-            temp_ca_file.write(ca)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_server_file:
+            temp_server_file.write(server)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_client_file: 
+            temp_client_file.write(client)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_key_file: 
+            temp_key_file.write(key)
+        
+        # Returning certificates in one logical unit.
+        # The generator on localhost is not associated with the *.ecfeed.com domain, it cannot the checked (that's why it is set to False).
+        return { "server" : False, "client" : temp_client_file.name, "key" : temp_key_file.name }   
 
-        try:
-            response = self.__process_request(request, False, temp_cert_file.name, temp_pkey_file.name) # verify = temp_ca_file.name
+    def __certificate_remove(self, cert):
 
-            chunk_iterations = 0
-            data_loop = True
-            message = ''
+        if not isinstance(cert["server"], bool):
+            remove(cert["server"])
+        if not isinstance(cert["client"], bool):
+            remove(cert["client"])
+        if not isinstance(cert["key"], bool):
+            remove(cert["key"])
 
-            while data_loop:
-                args_info = {}
-                index_local = 0
-                
-                self.__feedback_set_up(feedback, feedback_label, method)
-
-                for line in response.iter_lines(decode_unicode=True):
-                    message = line.decode('utf-8')
-
-                    if (template != None) or raw_output:
-                        yield message
-                    else:
-                        test_data = self.__parse_test_line(line=message)
-                        
-                        if 'method' in test_data:
-                            args_info = test_data['method']
-                        if 'values' in test_data:
-                            test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
-
-                            self.__feedback_append(feedback, [feedback_label, "execution", index_local, "data"], test_case.copy(), condition=self.keep_test_data)
-                            self.__feedback_append(feedback, [feedback_label, "execution", index_local, "time"], time.time())
-
-                            test_case.append({"label" : feedback_label, "id" : index_local })
-
-                            index_local += 1
-
-                            yield test_case
-                        
-                feedback_data = self.__feedback_process(feedback, feedback_label)
-
-                if "END_CHUNK" in message:
-                    chunk_iterations += 1   
-                    request = self.__prepare_request(genserver=self.genserver, 
-                                                     model=model, method=method, 
-                                                     type="requestUpdate" if (chunk_iterations == chunk_iterations_max) else "requestChunk", 
-                                                     generation_id=feedback_label, feedback=feedback_data,
-                                                     data_source=data_source, template=template, **kwargs)
-                    response = self.__process_request(request, False, temp_cert_file.name, temp_pkey_file.name)
-                if "END_DATA" in message:
-                    data_loop = False
-
-        finally:
-            self.__close_connection(temp_ca_file.name, temp_cert_file.name, temp_pkey_file.name)
-
-    def __process_request(self, request, cert_server, cert_client, private_key):
-        response = requests.get(request, verify=cert_server, cert=(cert_client, private_key), stream=True)
+    def __process_request(self, request, cert):
+        response = requests.get(request, verify=cert["server"], cert=(cert["client"], cert["key"]), stream=True)
         
         if(response.status_code != 200):
             print('Error: ' + str(response.status_code))
             raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
         
         return response
-    
-    def __close_connection(self, cert_server, cert_client, private_key):
-
-        remove(cert_server)
-        remove(cert_client)
-        remove(private_key)
         
-    def __feedback_set_up(self, feedback, feedback_label, method):
+    def __feedback_set_up(self, feedback_id, model, method, cert):
 
-        if not feedback:
-            return
-        
-        if feedback_label in self.execution_data:
-            raise NameError('The generation ID already exists')
-
-        self.execution_data[feedback_label] = {}
-        self.execution_data[feedback_label]["execution"] = {}
-        self.execution_data[feedback_label]["test_provider_id"] = self.creation_timestamp
-        self.execution_data[feedback_label]["method"] = method
-        self.execution_data[feedback_label]["size_total"] = 0
-        self.execution_data[feedback_label]["size_passed"] = 0
-
-    def __feedback_append(self, feedback, path, element, condition=True):
-
-        if (not feedback) and (not condition):
+        if feedback_id is None:
             return
 
-        index = self.execution_data
+        # This should not happen, but if I forgot about something, this could mess the response really badly.
+        if feedback_id in self.execution_data:
+            raise NameError('The feedback ID already exists')
+
+        self.execution_data[feedback_id] = {}
+        self.execution_data[feedback_id]["execution"] = {}                          # Executed test cases.
+        self.execution_data[feedback_id]["id_provider"] = self.creation_timestamp   # Identification.
+        self.execution_data[feedback_id]["id_generation"] = feedback_id             # Identification.
+        self.execution_data[feedback_id]["model"] = model                           # Since we don't use this parameter in the feedback request, it should be added here.
+        self.execution_data[feedback_id]["method"] = method                         # Since we don't use this parameter in the feedback request, it should be added here.
+        self.execution_data[feedback_id]["size_total"] = 0                          # The total number of tests (not needed for dynamic tests).
+        self.execution_data[feedback_id]["size_passed"] = 0                         # Fun and useful field, somethat redundant though...
+        self.execution_data[feedback_id]["size_current"] = 0                        # Execution index.
+        self.execution_data[feedback_id]["certificate"] = cert                      # Data needed to send the feedback request.
+
+    # Modify the feedback data.
+    def __feedback_append(self, feedback_id, path, element, condition=True):
+
+        if not condition or (feedback_id is None):
+            return
+
+        index = self.execution_data[feedback_id]
 
         for i in range(len(path) - 1):
             if path[i] not in index:
@@ -313,16 +322,21 @@ class TestProvider:
 
         index[path[-1]] = element
 
-    def __feedback_process(self, feedback, feedback_label):
+    # Send feedback to the generator.
+    def __feedback_process(self, feedback_id):
 
-        if not feedback:
-            return ""
-        
-        data = self.execution_data[feedback_label].copy()
+        feedback_data = self.execution_data[feedback_id].copy()
+        cert = feedback_data["certificate"].copy()
 
-        del self.execution_data[feedback_label]
+        del feedback_data["certificate"]            # This part is not needed. The generator doesn't care about this stuff.
+        del feedback_data["size_current"]           # We already know this value.
+        del feedback_data["timestamp"]              # Not needed anymore.
+        del self.execution_data[feedback_id]        # Save some space. It was useful for dynamic response (the generation ID was the same for each chunk, what prevented errors).
 
-        return data
+        request = self.__prepare_request_feedback(feedback_id=feedback_id, feedback_data=feedback_data)
+
+        self.__process_request(request, cert)
+        self.__certificate_remove(cert)             # With listed (static) tests there is only one response, the certificates can be safely removed.
 
     def generate_nwise(self, **kwargs): 
         return self.nwise(template=None, **kwargs)
@@ -546,6 +560,7 @@ class TestProvider:
         elif method_name != None:
             return self.method_arg_types(self.method_info(method=method_name))
 
+    # There are two types of headers, I didn't want to create separate methods.
     def test_header(self, method_name, feedback=False):
         header = self.method_arg_names(method_name=method_name)
         
@@ -554,67 +569,57 @@ class TestProvider:
 
         return header
 
-    def next(self, generator):
-        
-        try:
-            data = next(generator)
-        except StopIteration:
-            return None
-
-        result = {}
-        result["test_id"] = data[len(data)-1]
-
-        for i in range(len(data)-1):
-            result["arg" + str(i)] = data[i] 
-
-        return result
-
+    # Handle each test execution.
     def feedback(self, test_id, status, comment=None):     
         
-        parsed = test_id["test_id"] if "test_id" in test_id else test_id
+        # if isinstance(test_id, str):
+        #     return
 
-        if parsed["label"] == "":
+        if (test_id["label"] not in self.execution_data) or (test_id["label"] == ""):
             return
+        
+        test_suite = self.execution_data[test_id["label"]]
 
-        if parsed["label"] not in self.execution_data:
-            return
-
-        test_suite = self.execution_data[parsed["label"]]
-
-        if parsed["id"] not in test_suite["execution"]:
+        # This means that the test has already been processed (and removed).
+        if test_id["id"] not in test_suite["execution"]:
+            test_suite["timestamp"] = time.time()       # Update the timestamp.
             return comment
 
-        test = test_suite["execution"][parsed["id"]]
+        test_case = test_suite["execution"][test_id["id"]]
 
-        if "passed" in test:
+        # In case we keep all tests, the test case is still there (after being processed) but with the flag 'passed'.
+        if "passed" in test_case:
+            test_suite["timestamp"] = time.time()       # Update the timestamp.
             return comment
 
-        if status and self.remove_passed_tests:
-            del test_suite["execution"][parsed["id"]]
+        if status and self.include_failed_tests_only:
+            # We can decide to remove passed tests and save memory/bandwidth.
+            del test_suite["execution"][test_id["id"]]
         else:
-            test["passed"] = status
-            test["time"] = time.time() - test["time"]
+            test_case["passed"] = status                                # Add status (failed/passed).
+            test_case["time"] = time.time() - test_suite["timestamp"]   # It doesn't work with listed (static) tests.
             if comment:
-                test["comment"] = comment
+                test_case["comment"] = comment
         
         if status:
             test_suite["size_passed"] += 1
 
-        test_suite["size_total"] += 1
+        test_suite["size_current"] += 1
 
+        if (test_suite["size_current"] == test_suite["size_total"]):
+            self.__feedback_process(test_id["label"])
+
+        test_suite["timestamp"] = time.time()       # Update the timestamp.
         return comment
 
     def __prepare_request(self, method, data_source,
                           type = "requestData",
-                          genserver=None, 
                           model=None,
                           template=None,
-                          generation_id=None,
+                          feedback_id=None,
                           feedback=None, 
                           **user_data) -> str:
                           
-        if genserver == None:
-            genserver = self.genserver
         if model == None:
             model = self.model
 
@@ -629,16 +634,25 @@ class TestProvider:
             generate_params['template'] = str(template)
             request_type='requestExport'
         
-        request = 'https://localhost:8090/testCaseService?requestType=' + request_type + '&client=python'
+        request = self.genserver + '/testCaseService?requestType=' + request_type + '&client=python'
         
-        if generation_id is not None:
-            request += '&generationID=' + str(generation_id)
+        if feedback_id is not None:
+            request += '&generationID=' + str(feedback_id)
 
         if feedback is not None:
             request += '&feedback=' + str(feedback)
         
         request += '&request='
         request += json.dumps(generate_params).replace(' ', '')
+
+        return request
+
+    # We don't need much data here, we know the credentials (certificate), test provider ID, generation ID, it is more than enough to identify associated requests.
+    def __prepare_request_feedback(self, feedback_id=None, feedback_data=None) -> str:
+        
+        request = self.genserver + '/testCaseService?requestType=requestUpdate&client=python'
+        request += '&generationID=' + str(feedback_id)
+        request += '&feedback=' + str(feedback_data)
 
         return request
 
