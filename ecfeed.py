@@ -8,6 +8,7 @@ import json
 from enum import Enum
 import sys
 import time
+import uuid
 
 import importlib
 
@@ -201,6 +202,10 @@ class TestProvider:
             yield request
             return
 
+        properties = self.__parse_dictionary(kwargs.pop('properties', None))
+        generator = data_source.__repr__()
+        label = kwargs.pop('label', '')
+
         # Handling certificates is a single, well defined task, it should be in a method.
         cert = self.__certificate_load()
 
@@ -210,8 +215,8 @@ class TestProvider:
             # Spring does not handle well bidirectional streams, and therefore, we should rely on the chunked response (read only).
             # Even more, we cannot keep the stream in the main loop (the test framework would freeze).
             # Here, we must provide all data needed to perform the final (feedback) request. 
-            self.__feedback_set_up(feedback_id, model, method, cert)
-
+            self.__feedback_set_up(feedback_id, model, method, generator, properties, label, cert)
+            
             args_info = {}
             test_index = 0
                 
@@ -232,7 +237,7 @@ class TestProvider:
                         test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
                 
                 if test_case is not None:
-                    self.__feedback_append(feedback_id, ["execution", test_index, "data"], test_case.copy(), condition=self.include_test_data)
+                    self.__feedback_append(feedback_id, ["execution", test_index, "data"], line, condition=self.include_test_data)
 
                     # If feedback is expected, one additional argument must be added to test methods.
                     if (feedback_id is not None):
@@ -243,14 +248,29 @@ class TestProvider:
                     yield test_case
                             
             # The number of tests must be known a priori (it is not the case with dynamic tests or adaptive generators).
-            self.__feedback_append(feedback_id, ["size_total"], test_index)
-            self.__feedback_append(feedback_id, ["timestamp"], time.time())
+            self.__feedback_append(feedback_id, ["summaryTotal"], test_index)
+            self.__feedback_append(feedback_id, ["reference"], time.time())
 
         except:
             # We cannot remove certificates with the 'finally' keyword, more requests are pending (e.g. in feedback).
             # However, if something goes wrong, it brakes the execution anyway.
             self.__certificate_remove(cert)
             
+
+    def __parse_dictionary(self, dictionary):
+
+        if dictionary == None:
+            return '-'
+
+        parsed = ''
+
+        for key in dictionary:
+            parsed += key + '=' + dictionary[key] + ', '
+
+        parsed = parsed[:-2]
+
+        return parsed
+
     # Certificates should be associated with the TestProvider class and not with the generation method.
     # However, due to the lack of destructors and the fact that requests can be executed in parallel, they may pollute the filesystem.
     def __certificate_load(self):
@@ -290,7 +310,7 @@ class TestProvider:
         
         return response
         
-    def __feedback_set_up(self, feedback_id, model, method, cert):
+    def __feedback_set_up(self, feedback_id, model, method, generator, properties, label, cert):
 
         if feedback_id is None:
             return
@@ -301,12 +321,17 @@ class TestProvider:
 
         self.execution_data[feedback_id] = {}
         self.execution_data[feedback_id]["execution"] = {}                          # Executed test cases.
-        self.execution_data[feedback_id]["id_provider"] = self.creation_timestamp   # Identification.
+        self.execution_data[feedback_id]["timestamp"] = feedback_id                 # The execution timestamp.
+        self.execution_data[feedback_id]["id"] = uuid.uuid4().hex                   # The ID number (should be unique in DB).
+        self.execution_data[feedback_id]["framework"] = 'Python'                    # The execution framework.
         self.execution_data[feedback_id]["model"] = model                           # Since we don't use this parameter in the feedback request, it should be added here.
         self.execution_data[feedback_id]["method"] = method                         # Since we don't use this parameter in the feedback request, it should be added here.
-        self.execution_data[feedback_id]["size_total"] = 0                          # The total number of tests (not needed for dynamic tests).
-        self.execution_data[feedback_id]["size_passed"] = 0                         # Fun and useful field, somethat redundant though...
-        self.execution_data[feedback_id]["size_current"] = 0                        # Execution index.
+        self.execution_data[feedback_id]["summaryTotal"] = 0                        # The total number of tests (not needed for dynamic testing).
+        self.execution_data[feedback_id]["summaryFailed"] = 0                       # Fun and useful field, somethat redundant though...
+        self.execution_data[feedback_id]["summaryCurrent"] = 0                      # The execution index (removed at the end).
+        self.execution_data[feedback_id]["generatorType"] = generator               # Generator type.
+        self.execution_data[feedback_id]["generatorOptions"] = properties           # Generator options.
+        self.execution_data[feedback_id]["label"] = label                           # Generation label.
         self.execution_data[feedback_id]["certificate"] = cert                      # Data needed to send the feedback request.
 
     # Modify the feedback data.
@@ -331,8 +356,8 @@ class TestProvider:
         cert = feedback_data["certificate"].copy()
 
         del feedback_data["certificate"]            # This part is not needed. The generator doesn't care about this stuff.
-        del feedback_data["size_current"]           # We already know this value.
-        del feedback_data["timestamp"]              # Not needed anymore.
+        del feedback_data["summaryCurrent"]         # We already know this value.
+        del feedback_data["reference"]              # Not needed anymore.
         del self.execution_data[feedback_id]        # Save some space. It was useful for dynamic response (the generation ID was the same for each chunk, what prevented errors).
 
         request = self.__prepare_request_feedback(feedback_id=feedback_id, feedback_data=feedback_data)
@@ -584,34 +609,34 @@ class TestProvider:
 
         # This means that the test has already been processed (and removed).
         if test_id["id"] not in test_suite["execution"]:
-            test_suite["timestamp"] = time.time()       # Update the timestamp.
+            test_suite["reference"] = time.time()       # Update the timestamp.
             return comment
 
         test_case = test_suite["execution"][test_id["id"]]
 
         # In case we keep all tests, the test case is still there (after being processed) but with the flag 'passed'.
         if "passed" in test_case:
-            test_suite["timestamp"] = time.time()       # Update the timestamp.
+            test_suite["reference"] = time.time()       # Update the timestamp.
             return comment
 
         if status and self.include_failed_tests_only:
             # We can decide to remove passed tests and save memory/bandwidth.
             del test_suite["execution"][test_id["id"]]
         else:
-            test_case["passed"] = status                                # Add status (failed/passed).
-            test_case["time"] = time.time() - test_suite["timestamp"]   # It doesn't work with listed (static) tests.
+            test_case["passed"] = "+" if status else "-"                # Add status (failed/passed).
+            test_case["time"] = time.time() - test_suite["reference"]   # It doesn't work with listed (static) tests.
             if comment:
                 test_case["comment"] = comment
         
-        if status:
-            test_suite["size_passed"] += 1
+        if not status:
+            test_suite["summaryFailed"] += 1
 
-        test_suite["size_current"] += 1
+        test_suite["summaryCurrent"] += 1
 
-        if (test_suite["size_current"] == test_suite["size_total"]):
+        if (test_suite["summaryCurrent"] == test_suite["summaryTotal"]):
             self.__feedback_process(test_id["label"])
 
-        test_suite["timestamp"] = time.time()       # Update the timestamp.
+        test_suite["reference"] = time.time()       # Update the timestamp.
         return comment
 
     def __prepare_request(self, method, data_source,
