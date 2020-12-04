@@ -115,7 +115,7 @@ class TestProvider:
         self.creation_timestamp = int(time.time() * 1000000)        
         self.execution_data = {}
         # Flags for development.
-        self.include_failed_tests_only = True
+        self.include_failed_tests_only = False
         self.include_test_data = True
 
     def generate(self, **kwargs):
@@ -205,6 +205,9 @@ class TestProvider:
         properties = self.__parse_dictionary(kwargs.pop('properties', None))
         generator = data_source.__repr__()
         label = kwargs.pop('label', '')
+        constraints = kwargs.pop('constraints', 'ALL')
+        test_suites = kwargs.pop('test_suites', None)
+        choices = kwargs.pop('choices', 'ALL')
 
         # Handling certificates is a single, well defined task, it should be in a method.
         cert = self.__certificate_load()
@@ -215,7 +218,7 @@ class TestProvider:
             # Spring does not handle well bidirectional streams, and therefore, we should rely on the chunked response (read only).
             # Even more, we cannot keep the stream in the main loop (the test framework would freeze).
             # Here, we must provide all data needed to perform the final (feedback) request. 
-            self.__feedback_set_up(feedback_id, model, method, generator, properties, label, cert)
+            self.__feedback_set_up(feedback_id, model, method, generator, properties, constraints, test_suites, choices, label, cert)
             
             args_info = {}
             test_index = 0
@@ -237,7 +240,7 @@ class TestProvider:
                         test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
                 
                 if test_case is not None:
-                    self.__feedback_append(feedback_id, ["execution", test_index, "data"], line, condition=self.include_test_data)
+                    self.__feedback_append(feedback_id, ["execution", str(test_index), "data"], line, condition=self.include_test_data)
 
                     # If feedback is expected, one additional argument must be added to test methods.
                     if (feedback_id is not None):
@@ -301,8 +304,8 @@ class TestProvider:
         if not isinstance(cert["key"], bool):
             remove(cert["key"])
 
-    def __process_request(self, request, cert):
-        response = requests.get(request, verify=cert["server"], cert=(cert["client"], cert["key"]), stream=True)
+    def __process_request(self, request, cert, body=''):
+        response = requests.get(request, verify=cert["server"], cert=(cert["client"], cert["key"]), data=body, stream=True)
         
         if(response.status_code != 200):
             print('Error: ' + str(response.status_code))
@@ -310,7 +313,7 @@ class TestProvider:
         
         return response
         
-    def __feedback_set_up(self, feedback_id, model, method, generator, properties, label, cert):
+    def __feedback_set_up(self, feedback_id, model, method, generator, properties, constraints, test_suites, choices, label, cert):
 
         if feedback_id is None:
             return
@@ -322,7 +325,7 @@ class TestProvider:
         self.execution_data[feedback_id] = {}
         self.execution_data[feedback_id]["execution"] = {}                          # Executed test cases.
         self.execution_data[feedback_id]["timestamp"] = feedback_id                 # The execution timestamp.
-        self.execution_data[feedback_id]["id"] = uuid.uuid4().hex                   # The ID number (should be unique in DB).
+        self.execution_data[feedback_id]["uuid"] = uuid.uuid4().hex                 # The ID number (should be unique in DB).
         self.execution_data[feedback_id]["framework"] = 'Python'                    # The execution framework.
         self.execution_data[feedback_id]["model"] = model                           # Since we don't use this parameter in the feedback request, it should be added here.
         self.execution_data[feedback_id]["method"] = method                         # Since we don't use this parameter in the feedback request, it should be added here.
@@ -331,9 +334,14 @@ class TestProvider:
         self.execution_data[feedback_id]["summaryCurrent"] = 0                      # The execution index (removed at the end).
         self.execution_data[feedback_id]["generatorType"] = generator               # Generator type.
         self.execution_data[feedback_id]["generatorOptions"] = properties           # Generator options.
+        self.execution_data[feedback_id]["constraints"] = constraints               # Constraints.
+        self.execution_data[feedback_id]["choices"] = choices                       # Choices.
         self.execution_data[feedback_id]["label"] = label                           # Generation label.
         self.execution_data[feedback_id]["certificate"] = cert                      # Data needed to send the feedback request.
 
+        if test_suites:
+            self.execution_data[feedback_id]["testSuites"] = test_suites            # Test suites.
+        
     # Modify the feedback data.
     def __feedback_append(self, feedback_id, path, element, condition=True):
 
@@ -355,14 +363,14 @@ class TestProvider:
         feedback_data = self.execution_data[feedback_id].copy()
         cert = feedback_data["certificate"].copy()
 
-        del feedback_data["certificate"]            # This part is not needed. The generator doesn't care about this stuff.
         del feedback_data["summaryCurrent"]         # We already know this value.
+        del feedback_data["certificate"]            # This part is not needed. The generator doesn't care about this stuff.
         del feedback_data["reference"]              # Not needed anymore.
         del self.execution_data[feedback_id]        # Save some space. It was useful for dynamic response (the generation ID was the same for each chunk, what prevented errors).
 
-        request = self.__prepare_request_feedback(feedback_id=feedback_id, feedback_data=feedback_data)
+        request = self.__prepare_request_feedback(feedback_id=feedback_id)
 
-        self.__process_request(request, cert)
+        self.__process_request(request, cert, json.dumps(feedback_data))
         self.__certificate_remove(cert)             # With listed (static) tests there is only one response, the certificates can be safely removed.
 
     def generate_nwise(self, **kwargs): 
@@ -608,22 +616,22 @@ class TestProvider:
         test_suite = self.execution_data[test_id["label"]]
 
         # This means that the test has already been processed (and removed).
-        if test_id["id"] not in test_suite["execution"]:
+        if str(test_id["id"]) not in test_suite["execution"]:
             test_suite["reference"] = time.time()       # Update the timestamp.
             return comment
 
-        test_case = test_suite["execution"][test_id["id"]]
+        test_case = test_suite["execution"][str(test_id["id"])]
 
-        # In case we keep all tests, the test case is still there (after being processed) but with the flag 'passed'.
-        if "passed" in test_case:
+        # In case we keep all tests, the test case is still there (after being processed) but with the flag 'status'.
+        if "status" in test_case:
             test_suite["reference"] = time.time()       # Update the timestamp.
             return comment
 
         if status and self.include_failed_tests_only:
             # We can decide to remove passed tests and save memory/bandwidth.
-            del test_suite["execution"][test_id["id"]]
+            del test_suite["execution"][str(test_id["id"])]
         else:
-            test_case["passed"] = "+" if status else "-"                # Add status (failed/passed).
+            test_case["status"] = "p" if status else "f"                # Add status (failed/passed).
             test_case["time"] = time.time() - test_suite["reference"]   # It doesn't work with listed (static) tests.
             if comment:
                 test_case["comment"] = comment
@@ -675,11 +683,10 @@ class TestProvider:
         return request
 
     # We don't need much data here, we know the credentials (certificate), test provider ID, generation ID, it is more than enough to identify associated requests.
-    def __prepare_request_feedback(self, feedback_id=None, feedback_data=None) -> str:
+    def __prepare_request_feedback(self, feedback_id=None) -> str:
         
         request = self.genserver + '/testCaseService?requestType=requestUpdate&client=python'
         request += '&generationID=' + str(feedback_id)
-        request += '&feedback=' + str(feedback_data)
 
         return request
 
