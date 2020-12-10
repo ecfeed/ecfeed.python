@@ -9,7 +9,7 @@ import time
 
 # ---------------------------------------------------------
 
-ecfeed = TestProvider(model='TestUuid11')
+ecfeed = TestProvider(model='IML2-LPSS-KHOY-S2YK-Y2H6')
 method = 'QuickStart.test'
 
 # @pytest.mark.parametrize(ecfeed.test_header(method), ecfeed.generate_random(method=method, length=5))

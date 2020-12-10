@@ -70,6 +70,17 @@ class DataSource(Enum):
         if self == DataSource.RANDOM:
             return 'genRandom'
 
+    def to_feedback(self):
+        if self == DataSource.STATIC_DATA:
+            return 'Static'
+        if ((self == DataSource.NWISE) or \
+            (self == DataSource.PAIRWISE)):
+            return 'NWise'
+        if self == DataSource.CARTESIAN:
+            return 'Cartesian'
+        if self == DataSource.RANDOM:
+            return 'Random'
+
 class TestProvider:
     '''Access provider to ecFeed remote generator services
 
@@ -203,7 +214,7 @@ class TestProvider:
             return
 
         properties = self.__parse_dictionary(kwargs.pop('properties', None))
-        generator = data_source.__repr__()
+        generator = data_source.to_feedback()
         label = kwargs.pop('label', '')
         constraints = kwargs.pop('constraints', 'ALL')
         test_suites = kwargs.pop('test_suites', None)
@@ -234,6 +245,10 @@ class TestProvider:
                 else:
                     test_data = self.__parse_test_line(line=line) 
                         
+                    if 'id' in test_data:
+                        self.__feedback_append(feedback_id, ["id"], test_data['id'])
+                    if 'method_qualified' in test_data:
+                        self.__feedback_append(feedback_id, ["method"], test_data['method_qualified'])
                     if 'method' in test_data:
                         args_info = test_data['method']
                     if 'values' in test_data:
@@ -325,7 +340,7 @@ class TestProvider:
         self.execution_data[feedback_id] = {}
         self.execution_data[feedback_id]["execution"] = {}                          # Executed test cases.
         self.execution_data[feedback_id]["timestamp"] = feedback_id                 # The execution timestamp.
-        self.execution_data[feedback_id]["uuid"] = uuid.uuid4().hex                 # The ID number (should be unique in DB).
+        self.execution_data[feedback_id]["id"] = 0                                  # The ID number (should be unique in DB).
         self.execution_data[feedback_id]["framework"] = 'Python'                    # The execution framework.
         self.execution_data[feedback_id]["model"] = model                           # Since we don't use this parameter in the feedback request, it should be added here.
         self.execution_data[feedback_id]["method"] = method                         # Since we don't use this parameter in the feedback request, it should be added here.
@@ -685,7 +700,7 @@ class TestProvider:
     # We don't need much data here, we know the credentials (certificate), test provider ID, generation ID, it is more than enough to identify associated requests.
     def __prepare_request_feedback(self, feedback_id=None) -> str:
         
-        request = self.genserver + '/testCaseService?requestType=requestUpdate&client=python'
+        request = self.genserver + '/streamFeedback?client=python'
         request += '&generationID=' + str(feedback_id)
 
         return request
@@ -699,7 +714,9 @@ class TestProvider:
         if 'info'  in parsed_line:
             info = parsed_line['info'].replace('\'', '"')
             try:
-                result['method'] = self.__parse_method_definition(json.loads(info)['method'])
+                result['id'] = json.loads(info)['id']
+                result['method_qualified'] = json.loads(info)['method']
+                result['method'] = self.__parse_method_definition(result['method_qualified'])
             except (ValueError, KeyError) as e:
                 pass
         elif 'testCase' in parsed_line:
