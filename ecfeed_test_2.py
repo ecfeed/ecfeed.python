@@ -26,7 +26,7 @@ method = 'QuickStart.test'
 #     assert random.random() < 0.5, ecfeed.feedback(test_id, False, "bad")
 #     ecfeed.feedback(test_id, True, "good")
 
-@pytest.mark.parametrize(ecfeed.test_header('com.example.test.Playground.size_10x10', feedback=True), ecfeed.generate_random(method='com.example.test.Playground.size_10x10', length=100, duplicates=True, feedback=True))
+@pytest.mark.parametrize(ecfeed.test_header('com.example.test.Playground.size_10x10', feedback=True), ecfeed.generate_random(method='com.example.test.Playground.size_10x10', length=100, duplicates=True, custom={'uno':'1', 'dos':'2'}, feedback=True))
 def test_method_4(a, b, c, d, e, f, g, h, i, j, test_id):
     assert random.random() < 0.5, ecfeed.feedback(test_id, False)
     ecfeed.feedback(test_id, True)

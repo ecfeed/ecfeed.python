@@ -213,12 +213,15 @@ class TestProvider:
             yield request
             return
 
-        properties = self.__parse_dictionary(kwargs.pop('properties', None))
-        generator = data_source.to_feedback()
-        label = kwargs.pop('label', '')
-        constraints = kwargs.pop('constraints', 'ALL')
-        test_suites = kwargs.pop('test_suites', None)
-        choices = kwargs.pop('choices', 'ALL')
+        config = {
+            'properties' : self.__parse_dictionary(kwargs.pop('properties', None)),
+            'generator' : data_source.to_feedback(),
+            'label' : kwargs.pop('label', ''),
+            'constraints' : kwargs.pop('constraints', 'ALL'),
+            'suites' : kwargs.pop('test_suites', None),
+            'choices' : kwargs.pop('choices', 'ALL'),
+            'custom' : kwargs.pop('custom', {})
+        }
 
         # Handling certificates is a single, well defined task, it should be in a method.
         cert = self.__certificate_load()
@@ -229,7 +232,7 @@ class TestProvider:
             # Spring does not handle well bidirectional streams, and therefore, we should rely on the chunked response (read only).
             # Even more, we cannot keep the stream in the main loop (the test framework would freeze).
             # Here, we must provide all data needed to perform the final (feedback) request. 
-            self.__feedback_set_up(feedback_id, model, method, generator, properties, constraints, test_suites, choices, label, cert)
+            self.__feedback_set_up(feedback_id, model, method, config, cert)
             
             args_info = {}
             test_index = 0
@@ -328,7 +331,7 @@ class TestProvider:
         
         return response
         
-    def __feedback_set_up(self, feedback_id, model, method, generator, properties, constraints, test_suites, choices, label, cert):
+    def __feedback_set_up(self, feedback_id, model, method, config, cert):
 
         if feedback_id is None:
             return
@@ -338,24 +341,25 @@ class TestProvider:
             raise NameError('The feedback ID already exists')
 
         self.execution_data[feedback_id] = {}
-        self.execution_data[feedback_id]["execution"] = {}                          # Executed test cases.
-        self.execution_data[feedback_id]["timestamp"] = feedback_id                 # The execution timestamp.
-        self.execution_data[feedback_id]["id"] = 0                                  # The ID number (should be unique in DB).
-        self.execution_data[feedback_id]["framework"] = 'Python'                    # The execution framework.
-        self.execution_data[feedback_id]["model"] = model                           # Since we don't use this parameter in the feedback request, it should be added here.
-        self.execution_data[feedback_id]["method"] = method                         # Since we don't use this parameter in the feedback request, it should be added here.
-        self.execution_data[feedback_id]["summaryTotal"] = 0                        # The total number of tests (not needed for dynamic testing).
-        self.execution_data[feedback_id]["summaryFailed"] = 0                       # Fun and useful field, somethat redundant though...
-        self.execution_data[feedback_id]["summaryCurrent"] = 0                      # The execution index (removed at the end).
-        self.execution_data[feedback_id]["generatorType"] = generator               # Generator type.
-        self.execution_data[feedback_id]["generatorOptions"] = properties           # Generator options.
-        self.execution_data[feedback_id]["constraints"] = constraints               # Constraints.
-        self.execution_data[feedback_id]["choices"] = choices                       # Choices.
-        self.execution_data[feedback_id]["label"] = label                           # Generation label.
-        self.execution_data[feedback_id]["certificate"] = cert                      # Data needed to send the feedback request.
+        self.execution_data[feedback_id]["execution"] = {}                              # Executed test cases.
+        self.execution_data[feedback_id]["timestamp"] = feedback_id                     # The execution timestamp.
+        self.execution_data[feedback_id]["id"] = 0                                      # The ID number (should be unique in DB).
+        self.execution_data[feedback_id]["framework"] = 'Python'                        # The execution framework.
+        self.execution_data[feedback_id]["model"] = model                               # Since we don't use this parameter in the feedback request, it should be added here.
+        self.execution_data[feedback_id]["method"] = method                             # Since we don't use this parameter in the feedback request, it should be added here.
+        self.execution_data[feedback_id]["summaryTotal"] = 0                            # The total number of tests (not needed for dynamic testing).
+        self.execution_data[feedback_id]["summaryFailed"] = 0                           # Fun and useful field, somethat redundant though...
+        self.execution_data[feedback_id]["summaryCurrent"] = 0                          # The execution index (removed at the end).
+        self.execution_data[feedback_id]["generatorType"] = config['generator']         # Generator type.
+        self.execution_data[feedback_id]["generatorOptions"] = config['properties']     # Generator options.
+        self.execution_data[feedback_id]["constraints"] = config['constraints']         # Constraints.
+        self.execution_data[feedback_id]["choices"] = config['choices']                 # Choices.
+        self.execution_data[feedback_id]["label"] = config['label']                     # Generation label.
+        self.execution_data[feedback_id]["custom"] = config['custom']                   # Custom data.
+        self.execution_data[feedback_id]["certificate"] = cert                          # Data needed to send the feedback request.
 
-        if test_suites:
-            self.execution_data[feedback_id]["testSuites"] = test_suites            # Test suites.
+        if config['suites']:
+            self.execution_data[feedback_id]["testSuites"] = config['suites']            # Test suites.
         
     # Modify the feedback data.
     def __feedback_append(self, feedback_id, path, element, condition=True):
