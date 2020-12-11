@@ -70,7 +70,7 @@ class DataSource(Enum):
         if self == DataSource.RANDOM:
             return 'genRandom'
 
-    def to_feedback(self):
+    def to_feedback_param(self):
         if self == DataSource.STATIC_DATA:
             return 'Static'
         if ((self == DataSource.NWISE) or \
@@ -116,18 +116,12 @@ class TestProvider:
             id of the default model used by generators
 
         '''
-        # The generation server is one of the connection parameters which should be associated with the TestProvider (the connection parameter can be verified in the constructor).
-        # I don't see any use case when it is changed during the generation process. To do it, a separate TestProvider could be created, it is a very light-weight object.
         self.genserver = genserver      
         self.model = model
         self.keystore_path = path.expanduser(keystore_path)
         self.password = password
-        # Convert to [us]. It should be unique for each generations, integers are easier to handle.
         self.creation_timestamp = int(time.time() * 1000000)        
         self.execution_data = {}
-        # Flags for development.
-        self.include_failed_tests_only = False
-        self.include_test_data = True
 
     def generate(self, **kwargs):
         """Generic call to ecfeed generator service
@@ -188,7 +182,7 @@ class TestProvider:
         EcFeedError
             If the generator service resposes with error
         """
-
+        
         try:
             method = kwargs.pop('method')
             data_source = kwargs.pop('data_source')
@@ -198,8 +192,8 @@ class TestProvider:
         model = kwargs.pop('model', self.model)
         template = kwargs.pop('template', None)
 
-        feedback_flag = kwargs.pop('feedback', False)                                   # The flag is only used once, the code is more readable that way/
-        feedback_id = int(time.time() * 1000000) if feedback_flag == True else None     # If there is no ID, the feedback is not wanted, simple as that.
+        feedback_flag = kwargs.pop('feedback', False)
+        feedback_id = int(time.time() * 1000000) if feedback_flag == True else None
 
         raw_output = False
         if 'raw_output' in kwargs or template == TemplateType.RAW:
@@ -214,24 +208,20 @@ class TestProvider:
             return
 
         config = {
-            'properties' : self.__parse_dictionary(kwargs.pop('properties', None)),
-            'generator' : data_source.to_feedback(),
-            'label' : kwargs.pop('label', ''),
-            'constraints' : kwargs.pop('constraints', 'ALL'),
-            'suites' : kwargs.pop('test_suites', None),
+            'generator_options' : self.__parse_dictionary(kwargs.pop('properties', None)),
+            'generator_type' : data_source.to_feedback_param(),
+            'test_session_label' : kwargs.pop('label', None),
+            'constraints' : kwargs.pop('constraints', None),
+            'test_suites' : kwargs.pop('test_suites', None),
             'choices' : kwargs.pop('choices', 'ALL'),
-            'custom' : kwargs.pop('custom', {})
+            'custom' : kwargs.pop('custom', None)
         }
 
-        # Handling certificates is a single, well defined task, it should be in a method.
         cert = self.__certificate_load()
 
         try:
-            # We send requests more than once, a separate method is useful.
             response = self.__process_request(request, cert)
-            # Spring does not handle well bidirectional streams, and therefore, we should rely on the chunked response (read only).
-            # Even more, we cannot keep the stream in the main loop (the test framework would freeze).
-            # Here, we must provide all data needed to perform the final (feedback) request. 
+
             self.__feedback_set_up(feedback_id, model, method, config, cert)
             
             args_info = {}
@@ -242,46 +232,43 @@ class TestProvider:
                 test_case = None
 
                 if ((template != None) or raw_output) and (feedback_id is None):
-                    yield line                  # Just return the data, it should not be processed.
+                    yield line
                 elif ((template != None) or raw_output):
                     test_case = [str(line)]
                 else:
                     test_data = self.__parse_test_line(line=line) 
                         
-                    if 'id' in test_data:
-                        self.__feedback_append(feedback_id, ["id"], test_data['id'])
-                    if 'method_qualified' in test_data:
-                        self.__feedback_append(feedback_id, ["method"], test_data['method_qualified'])
+                    if 'timestamp' in test_data:
+                        self.__feedback_append(feedback_id, ["timestamp"], test_data['timestamp'])
+                    if 'test_session_id' in test_data:
+                        self.__feedback_append(feedback_id, ["testSessionId"], test_data['test_session_id'])
+                    if 'method_info' in test_data:
+                        self.__feedback_append(feedback_id, ["methodInfo"], test_data['method_info'])
                     if 'method' in test_data:
                         args_info = test_data['method']
                     if 'values' in test_data:
                         test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
                 
                 if test_case is not None:
-                    self.__feedback_append(feedback_id, ["execution", str(test_index), "data"], line, condition=self.include_test_data)
+                    self.__feedback_append(feedback_id, ["testResults", ("0:" + str(test_index)), "data"], line)
 
-                    # If feedback is expected, one additional argument must be added to test methods.
                     if (feedback_id is not None):
-                        test_case.append({"label" : feedback_id, "id" : test_index })
+                        test_case.append({"label" : feedback_id, "id" : ("0:" + str(test_index)) })
 
                     test_index += 1
 
                     yield test_case
                             
-            # The number of tests must be known a priori (it is not the case with dynamic tests or adaptive generators).
             self.__feedback_append(feedback_id, ["summaryTotal"], test_index)
-            self.__feedback_append(feedback_id, ["reference"], time.time())
 
         except:
-            # We cannot remove certificates with the 'finally' keyword, more requests are pending (e.g. in feedback).
-            # However, if something goes wrong, it brakes the execution anyway.
             self.__certificate_remove(cert)
             
 
     def __parse_dictionary(self, dictionary):
 
         if dictionary == None:
-            return '-'
+            return None
 
         parsed = ''
 
@@ -292,8 +279,6 @@ class TestProvider:
 
         return parsed
 
-    # Certificates should be associated with the TestProvider class and not with the generation method.
-    # However, due to the lack of destructors and the fact that requests can be executed in parallel, they may pollute the filesystem.
     def __certificate_load(self):
         with open(self.keystore_path, 'rb') as keystore_file:
             keystore = crypto.load_pkcs12(keystore_file.read(), self.password.encode('utf8'))
@@ -309,7 +294,6 @@ class TestProvider:
         with tempfile.NamedTemporaryFile(delete=False) as temp_key_file: 
             temp_key_file.write(key)
         
-        # Returning certificates in one logical unit.
         # The generator on localhost is not associated with the *.ecfeed.com domain, it cannot the checked (that's why it is set to False).
         return { "server" : False, "client" : temp_client_file.name, "key" : temp_key_file.name }   
 
@@ -336,32 +320,37 @@ class TestProvider:
         if feedback_id is None:
             return
 
-        # This should not happen, but if I forgot about something, this could mess the response really badly.
         if feedback_id in self.execution_data:
             raise NameError('The feedback ID already exists')
-
-        self.execution_data[feedback_id] = {}
-        self.execution_data[feedback_id]["execution"] = {}                              # Executed test cases.
-        self.execution_data[feedback_id]["timestamp"] = feedback_id                     # The execution timestamp.
-        self.execution_data[feedback_id]["id"] = 0                                      # The ID number (should be unique in DB).
-        self.execution_data[feedback_id]["framework"] = 'Python'                        # The execution framework.
-        self.execution_data[feedback_id]["model"] = model                               # Since we don't use this parameter in the feedback request, it should be added here.
-        self.execution_data[feedback_id]["method"] = method                             # Since we don't use this parameter in the feedback request, it should be added here.
-        self.execution_data[feedback_id]["summaryTotal"] = 0                            # The total number of tests (not needed for dynamic testing).
-        self.execution_data[feedback_id]["summaryFailed"] = 0                           # Fun and useful field, somethat redundant though...
-        self.execution_data[feedback_id]["summaryCurrent"] = 0                          # The execution index (removed at the end).
-        self.execution_data[feedback_id]["generatorType"] = config['generator']         # Generator type.
-        self.execution_data[feedback_id]["generatorOptions"] = config['properties']     # Generator options.
-        self.execution_data[feedback_id]["constraints"] = config['constraints']         # Constraints.
-        self.execution_data[feedback_id]["choices"] = config['choices']                 # Choices.
-        self.execution_data[feedback_id]["label"] = config['label']                     # Generation label.
-        self.execution_data[feedback_id]["custom"] = config['custom']                   # Custom data.
-        self.execution_data[feedback_id]["certificate"] = cert                          # Data needed to send the feedback request.
-
-        if config['suites']:
-            self.execution_data[feedback_id]["testSuites"] = config['suites']            # Test suites.
         
-    # Modify the feedback data.
+        self.execution_data[feedback_id] = {}
+        # Required fields.
+        self.execution_data[feedback_id]["testSessionId"] = 0
+        self.execution_data[feedback_id]["modelId"] = model
+        self.execution_data[feedback_id]["methodInfo"] = method
+        self.execution_data[feedback_id]["testResults"] = {}
+        # Optional fields, but the client is nice enough to send them.
+        self.execution_data[feedback_id]["framework"] = 'Python'
+        self.execution_data[feedback_id]["timestamp"] = feedback_id
+        self.execution_data[feedback_id]["generatorType"] = config['generator_type']
+        # Optional fields.
+        if config['generator_options']:
+            self.execution_data[feedback_id]["generatorOptions"] = config['generator_options']
+        if config['test_session_label']:
+            self.execution_data[feedback_id]["testSessionLabel"] = config['test_session_label']
+        if config['constraints']:
+            self.execution_data[feedback_id]["constraints"] = config['constraints']
+        if config['choices']:
+            self.execution_data[feedback_id]["choices"] = config['choices']
+        if config['custom']:
+            self.execution_data[feedback_id]["custom"] = config['custom']
+        if config['test_suites']:
+            self.execution_data[feedback_id]["testSuites"] = config['test_suites']
+        # Technical fields, removed before sending the feedback.
+        self.execution_data[feedback_id]["summaryTotal"] = 0
+        self.execution_data[feedback_id]["summaryCurrent"] = 0
+        self.execution_data[feedback_id]["certificate"] = cert
+        
     def __feedback_append(self, feedback_id, path, element, condition=True):
 
         if not condition or (feedback_id is None):
@@ -376,21 +365,21 @@ class TestProvider:
 
         index[path[-1]] = element
 
-    # Send feedback to the generator.
     def __feedback_process(self, feedback_id):
 
         feedback_data = self.execution_data[feedback_id].copy()
         cert = feedback_data["certificate"].copy()
 
-        del feedback_data["summaryCurrent"]         # We already know this value.
-        del feedback_data["certificate"]            # This part is not needed. The generator doesn't care about this stuff.
-        del feedback_data["reference"]              # Not needed anymore.
-        del self.execution_data[feedback_id]        # Save some space. It was useful for dynamic response (the generation ID was the same for each chunk, what prevented errors).
+        del feedback_data["summaryCurrent"]
+        del feedback_data["summaryTotal"]   
+        del feedback_data["certificate"]
+        
+        del self.execution_data[feedback_id]
 
-        request = self.__prepare_request_feedback(feedback_id=feedback_id)
+        request = self.__prepare_request_feedback(feedback_id=feedback_data['testSessionId'])
 
         self.__process_request(request, cert, json.dumps(feedback_data))
-        self.__certificate_remove(cert)             # With listed (static) tests there is only one response, the certificates can be safely removed.
+        self.__certificate_remove(cert)
 
     def generate_nwise(self, **kwargs): 
         return self.nwise(template=None, **kwargs)
@@ -614,7 +603,6 @@ class TestProvider:
         elif method_name != None:
             return self.method_arg_types(self.method_info(method=method_name))
 
-    # There are two types of headers, I didn't want to create separate methods.
     def test_header(self, method_name, feedback=False):
         header = self.method_arg_names(method_name=method_name)
         
@@ -623,47 +611,31 @@ class TestProvider:
 
         return header
 
-    # Handle each test execution.
-    def feedback(self, test_id, status, comment=None):     
+    def feedback(self, test_id, status, duration=None, comment=None, custom=None):     
         
-        # if isinstance(test_id, str):
-        #     return
-
         if (test_id["label"] not in self.execution_data) or (test_id["label"] == ""):
             return
         
         test_suite = self.execution_data[test_id["label"]]
+        test_case = test_suite["testResults"][test_id["id"]]
 
-        # This means that the test has already been processed (and removed).
-        if str(test_id["id"]) not in test_suite["execution"]:
-            test_suite["reference"] = time.time()       # Update the timestamp.
-            return comment
-
-        test_case = test_suite["execution"][str(test_id["id"])]
-
-        # In case we keep all tests, the test case is still there (after being processed) but with the flag 'status'.
         if "status" in test_case:
-            test_suite["reference"] = time.time()       # Update the timestamp.
             return comment
 
-        if status and self.include_failed_tests_only:
-            # We can decide to remove passed tests and save memory/bandwidth.
-            del test_suite["execution"][str(test_id["id"])]
-        else:
-            test_case["status"] = "p" if status else "f"                # Add status (failed/passed).
-            test_case["time"] = time.time() - test_suite["reference"]   # It doesn't work with listed (static) tests.
-            if comment:
-                test_case["comment"] = comment
+        test_case["status"] = "passed" if status else "failed"
         
-        if not status:
-            test_suite["summaryFailed"] += 1
+        if duration:
+            test_case["duration"] = duration
+        if comment:
+            test_case["comment"] = comment
+        if custom:
+            test_case["custom"] = custom
 
         test_suite["summaryCurrent"] += 1
 
         if (test_suite["summaryCurrent"] == test_suite["summaryTotal"]):
             self.__feedback_process(test_id["label"])
 
-        test_suite["reference"] = time.time()       # Update the timestamp.
         return comment
 
     def __prepare_request(self, method, data_source,
@@ -701,7 +673,6 @@ class TestProvider:
 
         return request
 
-    # We don't need much data here, we know the credentials (certificate), test provider ID, generation ID, it is more than enough to identify associated requests.
     def __prepare_request_feedback(self, feedback_id=None) -> str:
         
         request = self.genserver + '/streamFeedback?client=python'
@@ -718,9 +689,11 @@ class TestProvider:
         if 'info'  in parsed_line:
             info = parsed_line['info'].replace('\'', '"')
             try:
-                result['id'] = json.loads(info)['id']
-                result['method_qualified'] = json.loads(info)['method']
-                result['method'] = self.__parse_method_definition(result['method_qualified'])
+                json_parsed = json.loads(info)
+                result['timestamp'] = int(json_parsed['timestamp'])
+                result['test_session_id'] = json_parsed['id']
+                result['method_info'] = json_parsed['method']
+                result['method'] = self.__parse_method_definition(result['method_info'])
             except (ValueError, KeyError) as e:
                 pass
         elif 'testCase' in parsed_line:
