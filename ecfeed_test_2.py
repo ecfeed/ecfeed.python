@@ -26,7 +26,7 @@ method = 'QuickStart.test'
 #     assert random.random() < 0.5, ecfeed.feedback(test_id, False, "bad")
 #     ecfeed.feedback(test_id, True, "good")
 
-@pytest.mark.parametrize(ecfeed.test_header('QuickStart.test', feedback=True), ecfeed.generate_static_suite(method='QuickStart.test', test_suites=['suite1'], label='test', feedback=True))
+@pytest.mark.parametrize(ecfeed.test_header('QuickStart.test', feedback=True), ecfeed.nwise(method='QuickStart.test', label='test', feedback=True))
 def test_method_4(arg1, arg2, arg3, test_id):
     assert random.random() < 0.5, ecfeed.feedback(test_id, False)
     ecfeed.feedback(test_id, True)

@@ -213,7 +213,7 @@ class TestProvider:
             'test_session_label' : kwargs.pop('label', None),
             'constraints' : kwargs.pop('constraints', None),
             'test_suites' : kwargs.pop('test_suites', None),
-            'choices' : kwargs.pop('choices', 'ALL'),
+            'choices' : kwargs.pop('choices', None),
             'custom' : kwargs.pop('custom', None)
         }
 
