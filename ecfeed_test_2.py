@@ -9,7 +9,7 @@ import time
 
 # ---------------------------------------------------------
 
-ecfeed = TestProvider(model='IML2-LPSS-KHOY-S2YK-Y2H6')
+ecfeed = TestProvider(model='BL2H-B2FZ-JTEL-TB4O-YS1U')
 method = 'QuickStart.test'
 
 # @pytest.mark.parametrize(ecfeed.test_header(method), ecfeed.generate_random(method=method, length=5))
@@ -26,10 +26,10 @@ method = 'QuickStart.test'
 #     assert random.random() < 0.5, ecfeed.feedback(test_id, False, "bad")
 #     ecfeed.feedback(test_id, True, "good")
 
-@pytest.mark.parametrize(ecfeed.test_header('QuickStart.test', feedback=True), ecfeed.nwise(method='QuickStart.test', label='test', feedback=True))
-def test_method_4(arg1, arg2, arg3, test_id):
-    assert random.random() < 0.5, ecfeed.feedback(test_id, False)
-    ecfeed.feedback(test_id, True)
+# @pytest.mark.parametrize(ecfeed.test_header('QuickStart.test', feedback=True), ecfeed.random(method='QuickStart.test', length=10, feedback=True))
+# def test_method_4(arg1, arg2, arg3, test_id):
+#     assert random.random() < 0.5, ecfeed.feedback(test_id, False)
+#     ecfeed.feedback(test_id, True)
 
 # @pytest.mark.parametrize(["data", "test_id"], ecfeed.export_random(method=method, length=5, template=TemplateType.JSON, feedback=True))
 # def test_method_4(data, test_id):
@@ -37,3 +37,9 @@ def test_method_4(arg1, arg2, arg3, test_id):
 #     ecfeed.feedback(test_id, True)
 
 # ---------------------------------------------------------
+
+@pytest.mark.parametrize(ecfeed.test_header('com.example.test.Playground.size_10x10 ', feedback=True), ecfeed.nwise(method='com.example.test.Playground.size_10x10', feedback=True))
+def test_method_4(a, b, c, d, e, f, g, h, i, j, test_id):
+    print()
+    assert not (a == 'a0') and not(b == 'b1') and not (h == 'h6'), ecfeed.feedback(test_id, False, duration=int(time.time())+2000)
+    ecfeed.feedback(test_id, True, comment='Works')
