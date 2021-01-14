@@ -5,55 +5,41 @@ import sys
 import os
 import json
 import random
+import time
 
-ecfeed = TestProvider(model='2057-8093-8471-3697-1154')
-method = 'com.example.test.TestClass2.testMethod2'
+# ---------------------------------------------------------
 
-@pytest.mark.parametrize(ecfeed.test_header(method, feedback=True), ecfeed.generate_random(method=method, length=25, feedback=True))
-def test_method_1(arg0, arg1, arg2, arg3, arg4, arg5, test_id):
-    assert random.random() < 0.5, ecfeed.feedback(test_id, False)
-    ecfeed.feedback(test_id, True)
+ecfeed = TestProvider(model='BL2H-B2FZ-JTEL-TB4O-YS1U')
+method = 'QuickStart.test'
 
-# def main():
+# @pytest.mark.parametrize(ecfeed.test_header(method), ecfeed.generate_random(method=method, length=5))
+# def test_method_1(arg1, arg2, arg3):
+#     assert random.random() < 0.5
 
-    # for line in ecfeed.method_arg_names(method_name='com.example.test.TestClass2.testMethod2'):
-    #     print(line)
+# @pytest.mark.parametrize("data", ecfeed.generate_random(method=method, length=5))
+# def test_method_2(data):
+#     print(data)
 
-    # for line in ecfeed.method_arg_types(method_name='com.example.test.TestClass2.testMethod2'):
-    #     print(line)
+# Unfortunately we have to use the 'feedback' flag twice. Those are two unrelated methods... The first one defines argument names, the second one provides values.
+# @pytest.mark.parametrize(ecfeed.test_header(method, feedback=True), ecfeed.generate_cartesian(method=method, choices={'arg1' : ['choice1', 'choice2'], 'arg2' : ['choice2', 'choice3']}, feedback=True))
+# def test_method_3(arg1, arg2, arg3, test_id):
+#     assert random.random() < 0.5, ecfeed.feedback(test_id, False, "bad")
+#     ecfeed.feedback(test_id, True, "good")
 
-    # for line in ecfeed.export_nwise(method='com.example.test.TestClass2.testMethod2', n='2', template='XML'):
-    #     print(line)
+# @pytest.mark.parametrize(ecfeed.test_header('QuickStart.test', feedback=True), ecfeed.random(method='QuickStart.test', length=10, feedback=True))
+# def test_method_4(arg1, arg2, arg3, test_id):
+#     assert random.random() < 0.5, ecfeed.feedback(test_id, False)
+#     ecfeed.feedback(test_id, True)
 
-    # for line in ecfeed.generate_nwise(method='com.example.test.TestClass2.testMethod2', n='2'):
-    #     print(line)
+# @pytest.mark.parametrize(["data", "test_id"], ecfeed.export_random(method=method, length=5, template=TemplateType.JSON, feedback=True))
+# def test_method_4(data, test_id):
+#     print(data)
+#     ecfeed.feedback(test_id, True)
 
-    # for line in ecfeed.export_pairwise(method='com.example.test.TestClass2.testMethod2', template='XML'):
-    #     print(line)
+# ---------------------------------------------------------
 
-    # for line in ecfeed.generate_pairwise(method='com.example.test.TestClass2.testMethod2'):
-    #     print(line)
-
-    # for line in ecfeed.export_cartesian(method='com.example.test.TestClass2.testMethod2', template='XML' ):
-    #     print(line)
-
-    # for line in ecfeed.generate_cartesian(method='com.example.test.TestClass2.testMethod2'):
-    #     print(line)
-
-    # for line in ecfeed.export_random(method='com.example.test.TestClass2.testMethod2', length='2', adaptive='false', duplicates='false', template='XML'):
-    #     print(line)
-
-    # for line in ecfeed.generate_random(method='com.example.test.TestClass2.testMethod2', length='2', adaptive='false', duplicates='false'):
-    #     print(line)
-
-    # for line in ecfeed.export_static_suite(method='com.example.test.TestClass2.testMethod2', test_suites=['default'], template='XML'):
-    #     print(line)
-
-    # for line in ecfeed.generate_static_suite(method='com.example.test.TestClass2.testMethod2', test_suites=['default']):
-    #     print(line)
-   
-
-# if __name__ == "__main__":
-#     main()
-
-# python3 ecfeed_cli.py --model="2057-8093-8471-3697-1154" --method="com.example.test.TestClass2.testMethod2" --generate_pairwise --template="JSON"
+@pytest.mark.parametrize(ecfeed.test_header('com.example.test.Playground.size_10x10 ', feedback=True), ecfeed.nwise(method='com.example.test.Playground.size_10x10', feedback=True))
+def test_method_4(a, b, c, d, e, f, g, h, i, j, test_id):
+    print()
+    assert not (a == 'a0') and not(b == 'b1') and not (h == 'h6'), ecfeed.feedback(test_id, False, duration=int(time.time())+2000)
+    ecfeed.feedback(test_id, True, comment='Works')
