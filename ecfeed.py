@@ -19,7 +19,7 @@ def __default_keystore_path():
             return keystore_path
     return keystore_path
 
-DEFAULT_GENSERVER = 'https://localhost:8090' # gen.ecfeed.com
+DEFAULT_GENSERVER = 'https://develop-gen.ecfeed.com' #localhost:8090 
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
 DEFAULT_KEYSTORE_PASSWORD = 'changeit'
 
@@ -295,7 +295,7 @@ class TestProvider:
             temp_key_file.write(key)
         
         # The generator on localhost is not associated with the *.ecfeed.com domain, it cannot the checked (that's why it is set to False).
-        return { "server" : False, "client" : temp_client_file.name, "key" : temp_key_file.name }   
+        return { "server" : temp_server_file.name, "client" : temp_client_file.name, "key" : temp_key_file.name }   
 
     def __certificate_remove(self, cert):
 
