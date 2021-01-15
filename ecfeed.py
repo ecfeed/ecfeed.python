@@ -8,7 +8,6 @@ import json
 from enum import Enum
 import sys
 import time
-import uuid
 
 import importlib
 
@@ -193,7 +192,6 @@ class TestProvider:
         template = kwargs.pop('template', None)
 
         feedback_flag = kwargs.pop('feedback', False)
-        feedback_id = int(time.time() * 1000000) if feedback_flag == True else None
 
         raw_output = False
         if 'raw_output' in kwargs or template == TemplateType.RAW:
@@ -201,7 +199,7 @@ class TestProvider:
         if template == TemplateType.RAW: 
             template = None
 
-        request = self.__prepare_request(model=model, method=method, feedback_id=feedback_id, data_source=data_source, template=template, **kwargs)
+        request = self.__prepare_request(model=model, method=method, data_source=data_source, template=template, **kwargs)
 
         if(kwargs.pop('url', None)):
             yield request
@@ -218,12 +216,11 @@ class TestProvider:
         }
 
         cert = self.__certificate_load()
+        feedback_id = None
 
         try:
             response = self.__process_request(request, cert)
 
-            self.__feedback_set_up(feedback_id, model, method, config, cert)
-            
             args_info = {}
             test_index = 0
                 
@@ -238,10 +235,13 @@ class TestProvider:
                 else:
                     test_data = self.__parse_test_line(line=line) 
                         
+                    if 'test_session_id' in test_data:
+                        if feedback_flag is True:
+                            feedback_id = test_data['test_session_id']
+                            self.__feedback_set_up(feedback_id, model, method, config, cert)
+                            self.__feedback_append(feedback_id, ["testSessionId"], feedback_id)
                     if 'timestamp' in test_data:
                         self.__feedback_append(feedback_id, ["timestamp"], test_data['timestamp'])
-                    if 'test_session_id' in test_data:
-                        self.__feedback_append(feedback_id, ["testSessionId"], test_data['test_session_id'])
                     if 'method_info' in test_data:
                         self.__feedback_append(feedback_id, ["methodInfo"], test_data['method_info'])
                     if 'method' in test_data:
@@ -294,7 +294,7 @@ class TestProvider:
         with tempfile.NamedTemporaryFile(delete=False) as temp_key_file: 
             temp_key_file.write(key)
         
-        # The generator on localhost is not associated with the *.ecfeed.com domain, it cannot the checked (that's why it is set to False).
+        # In case of local testing, the 'server' value should be set to 'False'.
         return { "server" : temp_server_file.name, "client" : temp_client_file.name, "key" : temp_key_file.name }   
 
     def __certificate_remove(self, cert):
@@ -376,7 +376,7 @@ class TestProvider:
         
         del self.execution_data[feedback_id]
 
-        request = self.__prepare_request_feedback(feedback_id=feedback_data['testSessionId'])
+        request = self.genserver + '/streamFeedback?client=python'
 
         self.__process_request(request, cert, json.dumps(feedback_data))
         self.__certificate_remove(cert)
@@ -642,7 +642,6 @@ class TestProvider:
                           type = "requestData",
                           model=None,
                           template=None,
-                          feedback_id=None,
                           feedback=None, 
                           **user_data) -> str:
                           
@@ -661,22 +660,12 @@ class TestProvider:
             request_type='requestExport'
         
         request = self.genserver + '/testCaseService?requestType=' + request_type + '&client=python'
-        
-        if feedback_id is not None:
-            request += '&generationID=' + str(feedback_id)
 
         if feedback is not None:
             request += '&feedback=' + str(feedback)
         
         request += '&request='
         request += json.dumps(generate_params).replace(' ', '')
-
-        return request
-
-    def __prepare_request_feedback(self, feedback_id=None) -> str:
-        
-        request = self.genserver + '/streamFeedback?client=python'
-        request += '&generationID=' + str(feedback_id)
 
         return request
 
@@ -755,8 +744,3 @@ class TestProvider:
                 module = importlib.import_module(module_name)
                 enum_type = getattr(module, type_name)
                 return enum_type[value]
-            
-
-
-
-
