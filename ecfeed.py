@@ -11,14 +11,18 @@ import time
 
 import importlib
 
+LOCALHOST = False
+
 def __default_keystore_path():
-    keystore_paths = [path.expanduser('~/.ecfeed/security.p12'), path.expanduser('~/ecfeed/security.p12')]
+    keystore_paths = \
+        [path.expanduser('~/.ecfeed/localhost.p12'), path.expanduser('~/ecfeed/localhost.p12')] if LOCALHOST else \
+        [path.expanduser('~/.ecfeed/security.p12'), path.expanduser('~/ecfeed/security.p12')]    
     for keystore_path in keystore_paths:
         if path.exists(keystore_path):
             return keystore_path
     return keystore_path
 
-DEFAULT_GENSERVER = 'https://develop-gen.ecfeed.com' #localhost:8090 
+DEFAULT_GENSERVER = 'https://localhost:8090' if LOCALHOST else 'https://develop-gen.ecfeed.com'
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
 DEFAULT_KEYSTORE_PASSWORD = 'changeit'
 
@@ -217,15 +221,16 @@ class TestProvider:
 
         cert = self.__certificate_load()
         feedback_id = None
-
+        
         try:
             response = self.__process_request(request, cert)
-
+            
             args_info = {}
             test_index = 0
                 
             for line in response.iter_lines(decode_unicode=True):
                 line = line.decode('utf-8')
+
                 test_case = None
 
                 if ((template != None) or raw_output) and (feedback_id is None):
@@ -280,6 +285,7 @@ class TestProvider:
         return parsed
 
     def __certificate_load(self):
+
         with open(self.keystore_path, 'rb') as keystore_file:
             keystore = crypto.load_pkcs12(keystore_file.read(), self.password.encode('utf8'))
 
@@ -294,8 +300,7 @@ class TestProvider:
         with tempfile.NamedTemporaryFile(delete=False) as temp_key_file: 
             temp_key_file.write(key)
         
-        # In case of local testing, the 'server' value should be set to 'False'.
-        return { "server" : temp_server_file.name, "client" : temp_client_file.name, "key" : temp_key_file.name }   
+        return { "server" : False if LOCALHOST else temp_server_file.name, "client" : temp_client_file.name, "key" : temp_key_file.name }   
 
     def __certificate_remove(self, cert):
 
@@ -307,10 +312,22 @@ class TestProvider:
             remove(cert["key"])
 
     def __process_request(self, request, cert, body=''):
-        response = requests.get(request, verify=cert["server"], cert=(cert["client"], cert["key"]), data=body, stream=True)
+        response = ''
+
+        if not request.startswith('https://'):
+            print('The address should always start with https')
+            raise EcFeedError('The address should always start with https')
+
+        try:
+            response = requests.get(request, verify=cert["server"], cert=(cert["client"], cert["key"]), data=body, stream=True)
+        except requests.exceptions.RequestException as e:
+            print('The generated request is erroneous: ' + e.request.__dict__)
+            raise EcFeedError('The generated request is erroneous: ' + e.request.url)
         
-        if(response.status_code != 200):
+        if (response.status_code != 200):
             print('Error: ' + str(response.status_code))
+            for line in response.iter_lines(decode_unicode=True):
+                print(line)
             raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
         
         return response
@@ -605,10 +622,10 @@ class TestProvider:
 
     def test_header(self, method_name, feedback=False):
         header = self.method_arg_names(method_name=method_name)
-        
+
         if feedback:
             header.append("test_id")
-
+        
         return header
 
     def feedback(self, test_id, status, duration=None, comment=None, custom=None):     
@@ -671,10 +688,12 @@ class TestProvider:
 
     def __parse_test_line(self, line):
         result = {}
+
         try:
             parsed_line = json.loads(line)
         except ValueError as e:
             print('Unexpected error while parsing line: "' + line + '": ' + str(e))
+        
         if 'info'  in parsed_line:
             info = parsed_line['info'].replace('\'', '"')
             try:
