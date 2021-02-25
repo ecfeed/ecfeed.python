@@ -11,7 +11,7 @@ import time
 
 import importlib
 
-LOCALHOST = False
+LOCALHOST = True
 
 def __default_keystore_path():
     keystore_paths = \
@@ -639,7 +639,7 @@ class TestProvider:
         if "status" in test_case:
             return comment
 
-        test_case["status"] = "passed" if status else "failed"
+        test_case["status"] = "P" if status else "F"
         
         if duration:
             test_case["duration"] = duration
