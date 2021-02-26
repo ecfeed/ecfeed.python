@@ -11,7 +11,7 @@ import time
 
 import importlib
 
-LOCALHOST = True
+LOCALHOST = False
 
 def __default_keystore_path():
     keystore_paths = \

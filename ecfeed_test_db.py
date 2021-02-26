@@ -9,7 +9,7 @@ import time
 
 # ---------------------------------------------------------
 
-ecfeed = TestProvider(model='1F0U-420T-1QLS-6GRI-7HTO') #V8IT-NRW8-EABQ-QFWA-OM06/GKGL-M9IP-0ZT5-B4O0-02AA
+ecfeed = TestProvider(model='7LAP-M2H5-DCN6-YAKW-UKBU') #LRYK-Z4RF-W7AU-EF0Q-MYUF/7LAP-M2H5-DCN6-YAKW-UKBU
 method = 'QuickStart.test'
 
 @pytest.mark.parametrize(ecfeed.test_header('com.example.test.Playground.size_10x10', feedback=True), ecfeed.nwise(method='com.example.test.Playground.size_10x10', feedback=True))
