@@ -11,7 +11,7 @@ import time
 
 import importlib
 
-LOCALHOST = False
+LOCALHOST = True
 
 def __default_keystore_path():
     keystore_paths = \
@@ -699,7 +699,7 @@ class TestProvider:
             try:
                 json_parsed = json.loads(info)
                 result['timestamp'] = int(json_parsed['timestamp'])
-                result['test_session_id'] = json_parsed['id']
+                result['test_session_id'] = json_parsed['testSessionId']
                 result['method_info'] = json_parsed['method']
                 result['method'] = self.__parse_method_definition(result['method_info'])
             except (ValueError, KeyError) as e:
