@@ -9,13 +9,13 @@ import time
 
 # ---------------------------------------------------------
 
-ecfeed = TestProvider(model='BBNA-INRU-0F5I-2STO-0XLA') #LRYK-Z4RF-W7AU-EF0Q-MYUF/7LAP-M2H5-DCN6-YAKW-UKBU
+ecfeed = TestProvider(model='USCC-OF35-J7EF-XD3B-BM88') #LRYK-Z4RF-W7AU-EF0Q-MYUF/7LAP-M2H5-DCN6-YAKW-UKBU
 method = 'QuickStart.test'
 
-@pytest.mark.parametrize(ecfeed.test_header('com.example.test.Playground.size_10x10', feedback=True), ecfeed.nwise(method='com.example.test.Playground.size_10x10', feedback=True))
-def test_method_1a(a, b, c, d, e, f, g, h, i, j, test_id):
-    assert not (a == 'a0') and not(b == 'b1') and not (h == 'h6'), ecfeed.feedback(test_id, False, duration=int(time.time())+2000)
-    ecfeed.feedback(test_id, True, comment='Works')
+# @pytest.mark.parametrize(ecfeed.test_header('com.example.test.Playground.size_10x10', feedback=True), ecfeed.nwise(method='com.example.test.Playground.size_10x10', feedback=True))
+# def test_method_1a(a, b, c, d, e, f, g, h, i, j, test_id):
+#     assert not (a == 'a0') and not(b == 'b1') and not (h == 'h6'), ecfeed.feedback(test_id, False, duration=int(time.time())+2000)
+#     ecfeed.feedback(test_id, True, comment='Works')
 
 # @pytest.mark.parametrize(ecfeed.test_header('com.example.test.Playground.size_10x10 ', feedback=True), ecfeed.random(method='com.example.test.Playground.size_10x10', feedback=True, length=200))
 # def test_method_2a(a, b, c, d, e, f, g, h, i, j, test_id):
@@ -32,10 +32,10 @@ def test_method_1a(a, b, c, d, e, f, g, h, i, j, test_id):
 #     assert not (a == 'a0') and not(b == 'b1') and not (h == 'h6'), ecfeed.feedback(test_id, False, duration=int(time.time())+2000)
 #     ecfeed.feedback(test_id, True, comment='Works')
 
-# @pytest.mark.parametrize(ecfeed.test_header('QuickStart.test', feedback=True), ecfeed.random(method='QuickStart.test', length=20, feedback=True))
-# def test_method_1b(arg1, arg2, arg3, test_id):
-#     assert arg1 < 2, ecfeed.feedback(test_id, False)
-#     ecfeed.feedback(test_id, True)
+@pytest.mark.parametrize(ecfeed.test_header('QuickStart.test', feedback=True), ecfeed.random(method='QuickStart.test', length=20, feedback=True))
+def test_method_1b(arg1, arg2, arg3, test_id):
+    assert arg1 < 2, ecfeed.feedback(test_id, False)
+    ecfeed.feedback(test_id, True)
 
 # @pytest.mark.parametrize(ecfeed.test_header('QuickStart.test', feedback=True), ecfeed.cartesian(method='QuickStart.test', feedback=True))
 # def test_method_2b(arg1, arg2, arg3, test_id):
