@@ -13,7 +13,7 @@ import requests
 
 # ---------------------------------------------------------
 
-endpoint = "http://www.workshop-2020-march.ecfeed.com?mode=error"
+endpoint = "http://www.workshop-2020-march.ecfeed.com"
 
 form = {
     "execute": ["submit"],
@@ -21,8 +21,8 @@ form = {
     "input": [["name", "address", "quantity", "phone", "email"], ["country", "product", "color", "size", "payment", "delivery"]]
 }
 
-ecfeed = TestProvider(model='LANG-A4RD-MZ18-0G7M-KXXT')
-method = 'com.example.test.Demo.typeString'
+ecfeed = TestProvider(model='6EG2-YL4S-LMAK-Y5VW-VPV9')
+method = 'com.example.test.Demo.testConstraints'
 
 driver = webdriver.Firefox()
 

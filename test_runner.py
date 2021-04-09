@@ -9,7 +9,7 @@ import time
 
 # ---------------------------------------------------------
 
-ecfeed = TestProvider(model='BBNA-INRU-0F5I-2STO-0XLA')
+ecfeed = TestProvider(model='IMHL-K0DU-2U0I-J532-25J9')
 method = 'QuickStart.test'
 
 # ---------------------------------------------------------

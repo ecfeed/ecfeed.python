@@ -22,7 +22,7 @@ def __default_keystore_path():
             return keystore_path
     return keystore_path
 
-DEFAULT_GENSERVER = 'https://localhost:8090' if LOCALHOST else 'https://prerelease-gen.ecfeed.com'
+DEFAULT_GENSERVER = 'https://localhost:8090' if LOCALHOST else 'https://gen.ecfeed.com'
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
 DEFAULT_KEYSTORE_PASSWORD = 'changeit'
 

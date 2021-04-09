@@ -12,7 +12,7 @@ configuration = {
     "endpoint": "https://api.ecfeed.com/"
 }
 
-ecfeed = TestProvider(model='LANG-A4RD-MZ18-0G7M-KXXT')
+ecfeed = TestProvider(model='6EG2-YL4S-LMAK-Y5VW-VPV9')
 method = 'com.example.test.Demo.typeString'
 
 # ---------------------------------------------------------
