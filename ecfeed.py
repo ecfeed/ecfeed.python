@@ -193,9 +193,7 @@ class TestProvider:
         model = kwargs.pop('model', self.model)
         template = kwargs.pop('template', None)
 
-        raw_output = False
-        if 'raw_output' in kwargs or template == TemplateType.RAW:
-            raw_output = True
+        raw_output = True if ('raw_output' in kwargs or template == TemplateType.RAW) else False
         if template == TemplateType.RAW: 
             template = None
 
@@ -241,34 +239,77 @@ class TestProvider:
                 elif ((template != None) or raw_output):
                     test_case = [str(line)]
                 else:
-                    test_data = self.__parse_test_line(line=line) 
-                        
-                    if 'test_session_id' in test_data:
-                        if config["tmp"]['feedbackFlag'] is True: 
-                            self.__feedback_append(config, ["testSessionId"], test_data['test_session_id'])
-                    if 'timestamp' in test_data:
-                        self.__feedback_append(config, ["timestamp"], test_data['timestamp'])
-                    if 'method_info' in test_data:
-                        self.__feedback_append(config, ["methodInfo"], test_data['method_info'])
-                    if 'method' in test_data:
-                        config["tmp"]['argsInfo'] = test_data['method']
-                    if 'values' in test_data:
-                        test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in config["tmp"]['argsInfo']['args']]))]
+                    test_data = self.__response_parse_line(line=line) 
+                    self.__response_parse_test_session_id(config, test_data)
+                    self.__response_parse_timestamp(config, test_data)
+                    self.__response_parse_method_info(config, test_data)
+                    self.__response_parse_method(config, test_data)
+                    test_case = self.__response_parse_values(config, test_data)
                 
                 if test_case is not None:
-                    self.__feedback_append(config, ["testResults", ("0:" + str(config["tmp"]["testIndex"])), "data"], line)
-
-                    if (config["testSessionId"] is not None):
-                        test_case.append({"config" : config, "id" : ("0:" + str(config["tmp"]["testIndex"])) })
-
-                    config["tmp"]["testIndex"] += 1
-
-                    yield test_case
+                    yield self.__response_parse_test_case(line, config, test_case)
 
         except:
             self.__certificate_remove(config["tmp"]['certificate'])
             
 
+    # def __configuration_set_up(self, model, method, data_source, kwargs):
+    #     return {
+    #         'tmp' : {
+    #             'summaryCurrent' : 0,
+    #             'testIndex' : 0,
+    #             'certificate' : self.__certificate_load(),
+    #             'feedbackFlag' : kwargs.pop('feedback', False),
+    #             'argsInfo' : {}
+    #         },
+    #         'testSessionId' : None,
+    #         'modelId' : model,
+    #         'methodInfo' : method,
+    #         'framework' : 'Python',
+    #         'timestamp' : None,
+    #         'generatorType' : data_source.to_feedback_param(),
+    #         'generatorOptions' : self.__parse_dictionary(kwargs.pop('properties', None)),
+    #         'testSessionLabel' : kwargs.pop('label', None),
+    #         'constraints' : kwargs.pop('constraints', None),
+    #         'choices' : kwargs.pop('choices', None),
+    #         'custom' : kwargs.pop('custom', None),
+    #         'testSuites' : kwargs.pop('test_suites', None),
+    #         'testResults' : {}
+    #     }
+
+    def __response_parse_test_session_id(self, config, test_data):
+        if 'test_session_id' in test_data:
+            if config['tmp']['feedbackFlag'] is True: 
+                self.__feedback_append(config, ['testSessionId'], test_data['test_session_id'])
+
+    def __response_parse_timestamp(self, config, test_data):
+        if 'timestamp' in test_data:
+            self.__feedback_append(config, ['timestamp'], test_data['timestamp'])
+
+    def __response_parse_method_info(self, config, test_data):
+        if 'method_info' in test_data:
+            self.__feedback_append(config, ['methodInfo'], test_data['method_info'])
+
+    def __response_parse_method(self, config, test_data):
+        if 'method' in test_data:
+            config['tmp']['argsInfo'] = test_data['method']
+    
+    def __response_parse_values(self, config, test_data):
+        if 'values' in test_data:
+            return [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in config['tmp']['argsInfo']['args']]))]
+        else:
+            return None
+
+    def __response_parse_test_case(self, line, config, test_case):
+        self.__feedback_append(config, ['testResults', ('0:' + str(config['tmp']['testIndex'])), 'data'], line)
+
+        if (config['testSessionId'] is not None):
+            test_case.append({'config' : config, 'id' : ('0:' + str(config['tmp']['testIndex'])) })
+
+        config['tmp']['testIndex'] += 1
+
+        return test_case
+    
     def __parse_dictionary(self, dictionary):
 
         if dictionary == None:
@@ -282,7 +323,7 @@ class TestProvider:
         parsed = parsed[:-2]
 
         return parsed
-
+        
     def __certificate_load(self):
 
         with open(self.keystore_path, 'rb') as keystore_file:
@@ -641,7 +682,7 @@ class TestProvider:
 
         return request
 
-    def __parse_test_line(self, line):
+    def __response_parse_line(self, line):
         result = {}
 
         try:
