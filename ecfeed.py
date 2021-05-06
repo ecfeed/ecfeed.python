@@ -190,7 +190,11 @@ class TestProvider:
         except KeyError as e:
             raise EcFeedError(f"missing required argument: {e}.")
 
-        model = kwargs.pop('model', self.model)
+        model = kwargs.pop('model', None)
+
+        if (model == None):
+            model = self.model
+        
         template = kwargs.pop('template', None)
 
         raw_output = True if ('raw_output' in kwargs or template == TemplateType.RAW) else False
@@ -198,7 +202,7 @@ class TestProvider:
         if template == TemplateType.RAW: 
             template = None
 
-        request = self.__prepare_request(model=model, method=method, data_source=data_source, template=template, **kwargs)
+        request = RequestHelper.prepare_request_data(self.genserver, model, method, data_source, template=template, **kwargs)
 
         if (kwargs.pop('url', None)):
             yield request
@@ -207,8 +211,8 @@ class TestProvider:
         config = self.__configuration_set_up(model, method, data_source, **kwargs)
 
         try:
-            response = self.__process_request(request, config['tmp']['certificate'])
-                
+            response = RequestHelper.process_request(request, config['tmp']['certificate'])
+
             for line in response.iter_lines(decode_unicode=True):
                 line = line.decode('utf-8')
 
@@ -230,15 +234,14 @@ class TestProvider:
                     yield self.__response_parse_test_case(line, config, test_case)
 
         except:
-            self.__certificate_remove(config['tmp']['certificate'])
+            RequestHelper.certificate_remove(config['tmp']['certificate'])
             
-
     def __configuration_set_up(self, model, method, data_source, **kwargs):
         return {
             'tmp' : {
                 'summaryCurrent' : 0,
                 'testIndex' : 0,
-                'certificate' : self.__certificate_load(),
+                'certificate' : RequestHelper.certificate_load(self.keystore_path, self.password),
                 'feedbackFlag' : kwargs.pop('feedback', False),
                 'argsInfo' : {}
             },
@@ -304,54 +307,6 @@ class TestProvider:
 
         return parsed
         
-    def __certificate_load(self):
-
-        with open(self.keystore_path, 'rb') as keystore_file:
-            keystore = crypto.load_pkcs12(keystore_file.read(), self.password.encode('utf8'))
-
-        server = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_ca_certificates()[0])
-        client = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_certificate())
-        key = crypto.dump_privatekey(crypto.FILETYPE_PEM, keystore.get_privatekey())      
-
-        with tempfile.NamedTemporaryFile(delete=False) as temp_server_file:
-            temp_server_file.write(server)
-        with tempfile.NamedTemporaryFile(delete=False) as temp_client_file: 
-            temp_client_file.write(client)
-        with tempfile.NamedTemporaryFile(delete=False) as temp_key_file: 
-            temp_key_file.write(key)
-        
-        return { "server" : False if LOCALHOST else temp_server_file.name, "client" : temp_client_file.name, "key" : temp_key_file.name }   
-
-    def __certificate_remove(self, cert):
-
-        if not isinstance(cert["server"], bool):
-            remove(cert["server"])
-        if not isinstance(cert["client"], bool):
-            remove(cert["client"])
-        if not isinstance(cert["key"], bool):
-            remove(cert["key"])
-
-    def __process_request(self, request, cert, body=''):
-        response = ''
-
-        if not request.startswith('https://'):
-            print('The address should always start with https')
-            raise EcFeedError('The address should always start with https')
-
-        try:
-            response = requests.get(request, verify=cert["server"], cert=(cert["client"], cert["key"]), data=body, stream=True)
-        except requests.exceptions.RequestException as e:
-            print('The generated request is erroneous: ' + e.request.__dict__)
-            raise EcFeedError('The generated request is erroneous: ' + e.request.url)
-
-        if (response.status_code != 200):
-            print('Error: ' + str(response.status_code))
-            for line in response.iter_lines(decode_unicode=True):
-                print(line)
-            raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
-
-        return response
-        
     def __feedback_append(self, config, path, element, condition=True):
 
         if not condition:
@@ -372,10 +327,8 @@ class TestProvider:
 
         config = {k: v for k, v in config.items() if v is not None}
 
-        request = self.genserver + '/streamFeedback?client=python'
-
-        self.__process_request(request, cert, json.dumps(config))
-        self.__certificate_remove(cert)
+        RequestHelper.process_request(RequestHelper.prepare_request_feedback(self.genserver), cert, json.dumps(config))
+        RequestHelper.certificate_remove(cert)
 
     def generate_nwise(self, **kwargs): 
         return self.nwise(template=None, **kwargs)
@@ -631,37 +584,6 @@ class TestProvider:
 
         return comment
 
-    def __prepare_request(self, method, data_source,
-                          type = "requestData",
-                          model=None,
-                          template=None,
-                          feedback=None, 
-                          **user_data) -> str:
-                          
-        if model == None:
-            model = self.model
-
-        generate_params={}
-        generate_params['method'] = ''
-        generate_params['method'] += method
-        generate_params['model'] = model
-        generate_params['userData'] = self.__serialize_user_data(data_source=data_source, **user_data)
-        
-        request_type=type
-        if template != None:
-            generate_params['template'] = str(template)
-            request_type='requestExport'
-        
-        request = self.genserver + '/testCaseService?requestType=' + request_type + '&client=python'
-
-        if feedback is not None:
-            request += '&feedback=' + str(feedback)
-        
-        request += '&request='
-        request += json.dumps(generate_params).replace(' ', '')
-
-        return request
-
     def __response_parse_line(self, line):
         result = {}
 
@@ -687,23 +609,6 @@ class TestProvider:
                 print('Unexpected error when parsing test case line: "' + line + '": ' + str(e))
 
         return result
-
-    def __serialize_user_data(self, data_source, **kwargs):
-        user_data={}
-        user_data['dataSource']=repr(data_source)
-        test_suites=kwargs.pop('test_suites', None)
-        properties=kwargs.pop('properties', None)
-        constraints=kwargs.pop('constraints', None)
-        choices=kwargs.pop('choices', None)
-        if test_suites != None:
-            user_data['testSuites']=test_suites
-        if properties != None:
-            user_data['properties']=properties
-        if constraints != None:
-            user_data['constraints']=constraints
-        if choices != None:
-            user_data['choices']=choices
-        return json.dumps(user_data).replace(' ', '').replace('"', '\'')
 
     def __parse_method_definition(self, method_info_line):
         result={}
@@ -741,4 +646,100 @@ class TestProvider:
                 return enum_type[value]
 
 class RequestHelper:
-    
+
+    @staticmethod
+    def process_request(request, cert, body=''):
+        response = ''
+
+        if not request.startswith('https://'):
+            print('The address should always start with https')
+            raise EcFeedError('The address should always start with https')
+
+        try:
+            response = requests.get(request, verify=cert["server"], cert=(cert["client"], cert["key"]), data=body, stream=True)
+        except requests.exceptions.RequestException as e:
+            print('The generated request is erroneous: ' + e.request.__dict__)
+            raise EcFeedError('The generated request is erroneous: ' + e.request.url)
+
+        if (response.status_code != 200):
+            print('Error: ' + str(response.status_code))
+            for line in response.iter_lines(decode_unicode=True):
+                print(line)
+            raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
+
+        return response
+
+    @staticmethod
+    def certificate_load(keystore_path, keystore_password):
+
+        with open(keystore_path, 'rb') as keystore_file:
+            keystore = crypto.load_pkcs12(keystore_file.read(), keystore_password.encode('utf8'))
+
+        server = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_ca_certificates()[0])
+        client = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_certificate())
+        key = crypto.dump_privatekey(crypto.FILETYPE_PEM, keystore.get_privatekey())      
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_server_file:
+            temp_server_file.write(server)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_client_file: 
+            temp_client_file.write(client)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_key_file: 
+            temp_key_file.write(key)
+        
+        return { "server" : False if LOCALHOST else temp_server_file.name, "client" : temp_client_file.name, "key" : temp_key_file.name }   
+
+    @staticmethod
+    def certificate_remove(certificate):
+
+        if not isinstance(certificate["server"], bool):
+            remove(certificate["server"])
+        if not isinstance(certificate["client"], bool):
+            remove(certificate["client"])
+        if not isinstance(certificate["key"], bool):
+            remove(certificate["key"])
+
+    @staticmethod
+    def prepare_request_data(genserver, model, method, data_source, template=None, feedback=None, **user_data) -> str:
+        
+        generate_params={}
+        generate_params['method'] = method
+        generate_params['model'] = model
+        generate_params['userData'] = RequestHelper.serialize_user_data(data_source=data_source, **user_data)
+        
+        if template != None:
+            generate_params['template'] = str(template)
+            request_type='requestExport'
+        else:
+            request_type='requestData'
+        
+        request = genserver + '/testCaseService?requestType=' + request_type + '&client=python'
+
+        if feedback is not None:
+            request += '&feedback=' + str(feedback)
+        
+        request += '&request='
+        request += json.dumps(generate_params).replace(' ', '')
+
+        return request
+
+    @staticmethod
+    def prepare_request_feedback(genserver):
+        return genserver + '/streamFeedback?client=python'
+
+    @staticmethod
+    def serialize_user_data(data_source, **kwargs):
+        user_data={}
+        user_data['dataSource']=repr(data_source)
+        test_suites=kwargs.pop('test_suites', None)
+        properties=kwargs.pop('properties', None)
+        constraints=kwargs.pop('constraints', None)
+        choices=kwargs.pop('choices', None)
+        if test_suites != None:
+            user_data['testSuites']=test_suites
+        if properties != None:
+            user_data['properties']=properties
+        if constraints != None:
+            user_data['constraints']=constraints
+        if choices != None:
+            user_data['choices']=choices
+        return json.dumps(user_data).replace(' ', '').replace('"', '\'')
