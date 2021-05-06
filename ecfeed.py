@@ -194,16 +194,47 @@ class TestProvider:
         template = kwargs.pop('template', None)
 
         raw_output = True if ('raw_output' in kwargs or template == TemplateType.RAW) else False
+        
         if template == TemplateType.RAW: 
             template = None
 
         request = self.__prepare_request(model=model, method=method, data_source=data_source, template=template, **kwargs)
 
-        if(kwargs.pop('url', None)):
+        if (kwargs.pop('url', None)):
             yield request
             return
 
-        config = {
+        config = self.__configuration_set_up(model, method, data_source, **kwargs)
+
+        try:
+            response = self.__process_request(request, config['tmp']['certificate'])
+                
+            for line in response.iter_lines(decode_unicode=True):
+                line = line.decode('utf-8')
+
+                test_case = None
+
+                if ((template != None) or raw_output) and (config['testSessionId'] is None):
+                    yield line
+                elif ((template != None) or raw_output):
+                    test_case = [str(line)]
+                else:
+                    test_data = self.__response_parse_line(line=line) 
+                    self.__response_parse_test_session_id(config, test_data)
+                    self.__response_parse_timestamp(config, test_data)
+                    self.__response_parse_method_info(config, test_data)
+                    self.__response_parse_method(config, test_data)
+                    test_case = self.__response_parse_values(config, test_data)
+                
+                if test_case is not None:
+                    yield self.__response_parse_test_case(line, config, test_case)
+
+        except:
+            self.__certificate_remove(config['tmp']['certificate'])
+            
+
+    def __configuration_set_up(self, model, method, data_source, **kwargs):
+        return {
             'tmp' : {
                 'summaryCurrent' : 0,
                 'testIndex' : 0,
@@ -225,57 +256,6 @@ class TestProvider:
             'testSuites' : kwargs.pop('test_suites', None),
             'testResults' : {}
         }
-
-        try:
-            response = self.__process_request(request, config["tmp"]['certificate'])
-                
-            for line in response.iter_lines(decode_unicode=True):
-                line = line.decode('utf-8')
-
-                test_case = None
-
-                if ((template != None) or raw_output) and (config["testSessionId"] is None):
-                    yield line
-                elif ((template != None) or raw_output):
-                    test_case = [str(line)]
-                else:
-                    test_data = self.__response_parse_line(line=line) 
-                    self.__response_parse_test_session_id(config, test_data)
-                    self.__response_parse_timestamp(config, test_data)
-                    self.__response_parse_method_info(config, test_data)
-                    self.__response_parse_method(config, test_data)
-                    test_case = self.__response_parse_values(config, test_data)
-                
-                if test_case is not None:
-                    yield self.__response_parse_test_case(line, config, test_case)
-
-        except:
-            self.__certificate_remove(config["tmp"]['certificate'])
-            
-
-    # def __configuration_set_up(self, model, method, data_source, kwargs):
-    #     return {
-    #         'tmp' : {
-    #             'summaryCurrent' : 0,
-    #             'testIndex' : 0,
-    #             'certificate' : self.__certificate_load(),
-    #             'feedbackFlag' : kwargs.pop('feedback', False),
-    #             'argsInfo' : {}
-    #         },
-    #         'testSessionId' : None,
-    #         'modelId' : model,
-    #         'methodInfo' : method,
-    #         'framework' : 'Python',
-    #         'timestamp' : None,
-    #         'generatorType' : data_source.to_feedback_param(),
-    #         'generatorOptions' : self.__parse_dictionary(kwargs.pop('properties', None)),
-    #         'testSessionLabel' : kwargs.pop('label', None),
-    #         'constraints' : kwargs.pop('constraints', None),
-    #         'choices' : kwargs.pop('choices', None),
-    #         'custom' : kwargs.pop('custom', None),
-    #         'testSuites' : kwargs.pop('test_suites', None),
-    #         'testResults' : {}
-    #     }
 
     def __response_parse_test_session_id(self, config, test_data):
         if 'test_session_id' in test_data:
@@ -759,3 +739,6 @@ class TestProvider:
                 module = importlib.import_module(module_name)
                 enum_type = getattr(module, type_name)
                 return enum_type[value]
+
+class RequestHelper:
+    
