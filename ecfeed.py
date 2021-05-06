@@ -184,43 +184,29 @@ class TestProvider:
             If the generator service resposes with error
         """
         
-        try:
-            method = kwargs.pop('method')
-            data_source = kwargs.pop('data_source')
-        except KeyError as e:
-            raise EcFeedError(f"missing required argument: {e}.")
+        config = self.__configuration_init()
 
-        model = kwargs.pop('model', None)
+        self.__configuration_update_main(config, **kwargs)
 
-        if (model == None):
-            model = self.model
+        request = RequestHelper.prepare_request_data(self.genserver, config)
         
-        template = kwargs.pop('template', None)
-
-        raw_output = True if ('raw_output' in kwargs or template == TemplateType.RAW) else False
-        
-        if template == TemplateType.RAW: 
-            template = None
-
-        request = RequestHelper.prepare_request_data(self.genserver, model, method, data_source, template=template, **kwargs)
-
         if (kwargs.pop('url', None)):
             yield request
             return
 
-        config = self.__configuration_set_up(model, method, data_source, **kwargs)
+        self.__configuration_update_additional(config, **kwargs)
 
         try:
-            response = RequestHelper.process_request(request, config['tmp']['certificate'])
+            response = RequestHelper.process_request(request, config['config']['certificate'])
 
             for line in response.iter_lines(decode_unicode=True):
                 line = line.decode('utf-8')
 
                 test_case = None
 
-                if ((template != None) or raw_output) and (config['testSessionId'] is None):
+                if ((config['config']['template'] != None) or config['config']['rawOutput']) and (config['testSessionId'] is None):
                     yield line
-                elif ((template != None) or raw_output):
+                elif ((config['config']['template'] != None) or config['config']['rawOutput']):
                     test_case = [str(line)]
                 else:
                     test_data = self.__response_parse_line(line=line) 
@@ -234,11 +220,46 @@ class TestProvider:
                     yield self.__response_parse_test_case(line, config, test_case)
 
         except:
-            RequestHelper.certificate_remove(config['tmp']['certificate'])
+            RequestHelper.certificate_remove(config['config']['certificate'])
             
-    def __configuration_set_up(self, model, method, data_source, **kwargs):
+    def __configuration_init(self):
+
         return {
-            'tmp' : {
+            'config' : {}
+        }
+
+    def __configuration_update_main(self, config, **kwargs):
+
+        update = self.__configuration_init()
+
+        data_source = self.__configuration_get_data_source(**kwargs)
+        raw_output = self.__configuration_get_raw_output(**kwargs)
+        template = self.__configuration_get_template(**kwargs)
+
+        update = {
+            'config' : {
+                'template' : template,
+                'rawOutput' : raw_output,
+                'dataSource' : data_source,
+                'properties' : kwargs.pop('properties', None)
+            },
+            'modelId' : self.__configuration_get_model(**kwargs),
+            'methodInfo' : self.__configuration_get_method(**kwargs),
+            'generatorType' : data_source.to_feedback_param(),
+            'testSuites' : kwargs.pop('test_suites', None),
+            'constraints' : kwargs.pop('constraints', None),
+            'choices' : kwargs.pop('choices', None),
+        }
+
+        update['config'].update(config['config'])
+        config.update(update)
+
+    def __configuration_update_additional(self, config, **kwargs):
+        
+        update = self.__configuration_init()
+
+        update = {
+            'config' : {
                 'summaryCurrent' : 0,
                 'testIndex' : 0,
                 'certificate' : RequestHelper.certificate_load(self.keystore_path, self.password),
@@ -246,23 +267,55 @@ class TestProvider:
                 'argsInfo' : {}
             },
             'testSessionId' : None,
-            'modelId' : model,
-            'methodInfo' : method,
             'framework' : 'Python',
             'timestamp' : None,
-            'generatorType' : data_source.to_feedback_param(),
             'generatorOptions' : self.__parse_dictionary(kwargs.pop('properties', None)),
             'testSessionLabel' : kwargs.pop('label', None),
-            'constraints' : kwargs.pop('constraints', None),
-            'choices' : kwargs.pop('choices', None),
             'custom' : kwargs.pop('custom', None),
-            'testSuites' : kwargs.pop('test_suites', None),
             'testResults' : {}
         }
 
+        update['config'].update(config['config'])
+        config.update(update)
+
+    def __configuration_get_model(self, **kwargs):
+
+        model = kwargs.pop('model', None)
+
+        if (model == None):
+            model = self.model
+
+        return model
+
+    def __configuration_get_method(self, **kwargs):
+        
+        try:
+            return kwargs.pop('method')
+        except KeyError:
+            raise EcFeedError("The 'method' argument is not defined.")
+
+    def __configuration_get_data_source(self, **kwargs):
+
+        try:
+            return kwargs.pop('data_source')
+        except KeyError:
+            raise EcFeedError(f"The 'data_source' argument is not defined.")
+
+    def __configuration_get_raw_output(self, **kwargs):
+
+        return True if ('raw_output' in kwargs or kwargs.get('template', None) == TemplateType.RAW) else False
+
+    def __configuration_get_template(self, **kwargs):
+        template = kwargs.pop('template', None)
+
+        if template == TemplateType.RAW: 
+            template = None
+
+        return template
+
     def __response_parse_test_session_id(self, config, test_data):
         if 'test_session_id' in test_data:
-            if config['tmp']['feedbackFlag'] is True: 
+            if config['config']['feedbackFlag'] is True: 
                 self.__feedback_append(config, ['testSessionId'], test_data['test_session_id'])
 
     def __response_parse_timestamp(self, config, test_data):
@@ -275,21 +328,21 @@ class TestProvider:
 
     def __response_parse_method(self, config, test_data):
         if 'method' in test_data:
-            config['tmp']['argsInfo'] = test_data['method']
+            config['config']['argsInfo'] = test_data['method']
     
     def __response_parse_values(self, config, test_data):
         if 'values' in test_data:
-            return [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in config['tmp']['argsInfo']['args']]))]
+            return [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in config['config']['argsInfo']['args']]))]
         else:
             return None
 
     def __response_parse_test_case(self, line, config, test_case):
-        self.__feedback_append(config, ['testResults', ('0:' + str(config['tmp']['testIndex'])), 'data'], line)
+        self.__feedback_append(config, ['testResults', ('0:' + str(config['config']['testIndex'])), 'data'], line)
 
         if (config['testSessionId'] is not None):
-            test_case.append({'config' : config, 'id' : ('0:' + str(config['tmp']['testIndex'])) })
+            test_case.append({'config' : config, 'id' : ('0:' + str(config['config']['testIndex'])) })
 
-        config['tmp']['testIndex'] += 1
+        config['config']['testIndex'] += 1
 
         return test_case
     
@@ -321,9 +374,9 @@ class TestProvider:
 
     def __feedback_process(self, config):
 
-        cert = config["tmp"]["certificate"].copy()
+        cert = config['config']["certificate"].copy()
 
-        del config["tmp"]
+        del config['config']
 
         config = {k: v for k, v in config.items() if v is not None}
 
@@ -577,9 +630,9 @@ class TestProvider:
         if custom:
             test_case["custom"] = custom
 
-        test_suite["tmp"]["summaryCurrent"] += 1
+        test_suite['config']["summaryCurrent"] += 1
 
-        if (test_suite["tmp"]["summaryCurrent"] == test_suite["tmp"]["testIndex"]):
+        if (test_suite['config']["summaryCurrent"] == test_suite['config']["testIndex"]):
             self.__feedback_process(test_suite)
 
         return comment
@@ -699,27 +752,24 @@ class RequestHelper:
             remove(certificate["key"])
 
     @staticmethod
-    def prepare_request_data(genserver, model, method, data_source, template=None, feedback=None, **user_data) -> str:
+    def prepare_request_data(genserver, config) -> str:
         
-        generate_params={}
-        generate_params['method'] = method
-        generate_params['model'] = model
-        generate_params['userData'] = RequestHelper.serialize_user_data(data_source=data_source, **user_data)
+        params={}
+        params['method'] = config['methodInfo']
+        params['model'] = config['modelId']
+        params['userData'] = RequestHelper.serialize_user_data(config)
         
-        if template != None:
-            generate_params['template'] = str(template)
+        if config['config']['template'] != None:
+            params['template'] = str(config['config']['template'])
             request_type='requestExport'
         else:
             request_type='requestData'
         
         request = genserver + '/testCaseService?requestType=' + request_type + '&client=python'
-
-        if feedback is not None:
-            request += '&feedback=' + str(feedback)
         
         request += '&request='
-        request += json.dumps(generate_params).replace(' ', '')
-
+        request += json.dumps(params).replace(' ', '')
+        
         return request
 
     @staticmethod
@@ -727,13 +777,15 @@ class RequestHelper:
         return genserver + '/streamFeedback?client=python'
 
     @staticmethod
-    def serialize_user_data(data_source, **kwargs):
+    def serialize_user_data(config):
         user_data={}
-        user_data['dataSource']=repr(data_source)
-        test_suites=kwargs.pop('test_suites', None)
-        properties=kwargs.pop('properties', None)
-        constraints=kwargs.pop('constraints', None)
-        choices=kwargs.pop('choices', None)
+        user_data['dataSource']=repr(config['config']['dataSource'])
+
+        test_suites=config['testSuites']
+        properties=config['config']['properties']
+        constraints=config['constraints']
+        choices=config['choices']
+        
         if test_suites != None:
             user_data['testSuites']=test_suites
         if properties != None:
@@ -742,4 +794,5 @@ class RequestHelper:
             user_data['constraints']=constraints
         if choices != None:
             user_data['choices']=choices
+        
         return json.dumps(user_data).replace(' ', '').replace('"', '\'')
