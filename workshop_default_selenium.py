@@ -21,7 +21,7 @@ form = {
     "input": [["name", "address", "quantity", "phone", "email"], ["country", "product", "color", "size", "payment", "delivery"]]
 }
 
-ecfeed = TestProvider(model='6EG2-YL4S-LMAK-Y5VW-VPV9')
+ecfeed = TestProvider(model='KY3O-03EQ-EWBT-49UH-UR90')
 method = 'com.example.test.Demo.typeString'
 
 driver = webdriver.Firefox()

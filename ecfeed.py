@@ -11,7 +11,7 @@ import time
 
 import importlib
 
-LOCALHOST = False
+LOCALHOST = True
 
 def __default_keystore_path():
     keystore_paths = \
@@ -22,7 +22,7 @@ def __default_keystore_path():
             return keystore_path
     return keystore_path
 
-DEFAULT_GENSERVER = 'https://localhost:8090' if LOCALHOST else 'https://gen.ecfeed.com'
+DEFAULT_GENSERVER = 'https://localhost:8090' if LOCALHOST else 'https://develop-gen.ecfeed.com'
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
 DEFAULT_KEYSTORE_PASSWORD = 'changeit'
 
@@ -122,9 +122,7 @@ class TestProvider:
         self.genserver = genserver      
         self.model = model
         self.keystore_path = path.expanduser(keystore_path)
-        self.password = password
-        self.creation_timestamp = int(time.time() * 1000000)        
-        self.execution_data = {}
+        self.password = password    
 
     def generate(self, **kwargs):
         """Generic call to ecfeed generator service
@@ -195,8 +193,6 @@ class TestProvider:
         model = kwargs.pop('model', self.model)
         template = kwargs.pop('template', None)
 
-        feedback_flag = kwargs.pop('feedback', False)
-
         raw_output = False
         if 'raw_output' in kwargs or template == TemplateType.RAW:
             raw_output = True
@@ -210,30 +206,37 @@ class TestProvider:
             return
 
         config = {
-            'generator_options' : self.__parse_dictionary(kwargs.pop('properties', None)),
-            'generator_type' : data_source.to_feedback_param(),
-            'test_session_label' : kwargs.pop('label', None),
+            'tmp' : {
+                'summaryCurrent' : 0,
+                'testIndex' : 0,
+                'certificate' : self.__certificate_load(),
+                'feedbackFlag' : kwargs.pop('feedback', False),
+                'argsInfo' : {}
+            },
+            'testSessionId' : None,
+            'modelId' : model,
+            'methodInfo' : method,
+            'framework' : 'Python',
+            'timestamp' : None,
+            'generatorType' : data_source.to_feedback_param(),
+            'generatorOptions' : self.__parse_dictionary(kwargs.pop('properties', None)),
+            'testSessionLabel' : kwargs.pop('label', None),
             'constraints' : kwargs.pop('constraints', None),
-            'test_suites' : kwargs.pop('test_suites', None),
             'choices' : kwargs.pop('choices', None),
-            'custom' : kwargs.pop('custom', None)
+            'custom' : kwargs.pop('custom', None),
+            'testSuites' : kwargs.pop('test_suites', None),
+            'testResults' : {}
         }
 
-        cert = self.__certificate_load()
-        feedback_id = None
-        
         try:
-            response = self.__process_request(request, cert)
-            
-            args_info = {}
-            test_index = 0
+            response = self.__process_request(request, config["tmp"]['certificate'])
                 
             for line in response.iter_lines(decode_unicode=True):
                 line = line.decode('utf-8')
 
                 test_case = None
 
-                if ((template != None) or raw_output) and (feedback_id is None):
+                if ((template != None) or raw_output) and (config["testSessionId"] is None):
                     yield line
                 elif ((template != None) or raw_output):
                     test_case = [str(line)]
@@ -241,33 +244,29 @@ class TestProvider:
                     test_data = self.__parse_test_line(line=line) 
                         
                     if 'test_session_id' in test_data:
-                        if feedback_flag is True:
-                            feedback_id = test_data['test_session_id']
-                            self.__feedback_set_up(feedback_id, model, method, config, cert)
-                            self.__feedback_append(feedback_id, ["testSessionId"], feedback_id)
+                        if config["tmp"]['feedbackFlag'] is True: 
+                            self.__feedback_append(config, ["testSessionId"], test_data['test_session_id'])
                     if 'timestamp' in test_data:
-                        self.__feedback_append(feedback_id, ["timestamp"], test_data['timestamp'])
+                        self.__feedback_append(config, ["timestamp"], test_data['timestamp'])
                     if 'method_info' in test_data:
-                        self.__feedback_append(feedback_id, ["methodInfo"], test_data['method_info'])
+                        self.__feedback_append(config, ["methodInfo"], test_data['method_info'])
                     if 'method' in test_data:
-                        args_info = test_data['method']
+                        config["tmp"]['argsInfo'] = test_data['method']
                     if 'values' in test_data:
-                        test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
+                        test_case = [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in config["tmp"]['argsInfo']['args']]))]
                 
                 if test_case is not None:
-                    self.__feedback_append(feedback_id, ["testResults", ("0:" + str(test_index)), "data"], line)
+                    self.__feedback_append(config, ["testResults", ("0:" + str(config["tmp"]["testIndex"])), "data"], line)
 
-                    if (feedback_id is not None):
-                        test_case.append({"label" : feedback_id, "id" : ("0:" + str(test_index)) })
+                    if (config["testSessionId"] is not None):
+                        test_case.append({"config" : config, "id" : ("0:" + str(config["tmp"]["testIndex"])) })
 
-                    test_index += 1
+                    config["tmp"]["testIndex"] += 1
 
                     yield test_case
-                            
-            self.__feedback_append(feedback_id, ["summaryTotal"], test_index)
 
         except:
-            self.__certificate_remove(cert)
+            self.__certificate_remove(config["tmp"]['certificate'])
             
 
     def __parse_dictionary(self, dictionary):
@@ -323,79 +322,38 @@ class TestProvider:
         except requests.exceptions.RequestException as e:
             print('The generated request is erroneous: ' + e.request.__dict__)
             raise EcFeedError('The generated request is erroneous: ' + e.request.url)
-        
+
         if (response.status_code != 200):
             print('Error: ' + str(response.status_code))
             for line in response.iter_lines(decode_unicode=True):
                 print(line)
             raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
-        
+
         return response
         
-    def __feedback_set_up(self, feedback_id, model, method, config, cert):
+    def __feedback_append(self, config, path, element, condition=True):
 
-        if feedback_id is None:
+        if not condition:
             return
-
-        if feedback_id in self.execution_data:
-            raise NameError('The feedback ID already exists')
-        
-        self.execution_data[feedback_id] = {}
-        # Required fields.
-        self.execution_data[feedback_id]["testSessionId"] = 0
-        self.execution_data[feedback_id]["modelId"] = model
-        self.execution_data[feedback_id]["methodInfo"] = method
-        self.execution_data[feedback_id]["testResults"] = {}
-        # Optional fields, but the client is nice enough to send them.
-        self.execution_data[feedback_id]["framework"] = 'Python'
-        self.execution_data[feedback_id]["timestamp"] = feedback_id
-        self.execution_data[feedback_id]["generatorType"] = config['generator_type']
-        # Optional fields.
-        if config['generator_options']:
-            self.execution_data[feedback_id]["generatorOptions"] = config['generator_options']
-        if config['test_session_label']:
-            self.execution_data[feedback_id]["testSessionLabel"] = config['test_session_label']
-        if config['constraints']:
-            self.execution_data[feedback_id]["constraints"] = config['constraints']
-        if config['choices']:
-            self.execution_data[feedback_id]["choices"] = config['choices']
-        if config['custom']:
-            self.execution_data[feedback_id]["custom"] = config['custom']
-        if config['test_suites']:
-            self.execution_data[feedback_id]["testSuites"] = config['test_suites']
-        # Technical fields, removed before sending the feedback.
-        self.execution_data[feedback_id]["summaryTotal"] = 0
-        self.execution_data[feedback_id]["summaryCurrent"] = 0
-        self.execution_data[feedback_id]["certificate"] = cert
-        
-    def __feedback_append(self, feedback_id, path, element, condition=True):
-
-        if not condition or (feedback_id is None):
-            return
-
-        index = self.execution_data[feedback_id]
 
         for i in range(len(path) - 1):
-            if path[i] not in index:
-                index[path[i]] = {}
-            index = index[path[i]]
+            if path[i] not in config:
+                config[path[i]] = {}
+            config = config[path[i]]
 
-        index[path[-1]] = element
+        config[path[-1]] = element
 
-    def __feedback_process(self, feedback_id):
+    def __feedback_process(self, config):
 
-        feedback_data = self.execution_data[feedback_id].copy()
-        cert = feedback_data["certificate"].copy()
+        cert = config["tmp"]["certificate"].copy()
 
-        del feedback_data["summaryCurrent"]
-        del feedback_data["summaryTotal"]   
-        del feedback_data["certificate"]
-        
-        del self.execution_data[feedback_id]
+        del config["tmp"]
+
+        config = {k: v for k, v in config.items() if v is not None}
 
         request = self.genserver + '/streamFeedback?client=python'
 
-        self.__process_request(request, cert, json.dumps(feedback_data))
+        self.__process_request(request, cert, json.dumps(config))
         self.__certificate_remove(cert)
 
     def generate_nwise(self, **kwargs): 
@@ -630,10 +588,7 @@ class TestProvider:
 
     def feedback(self, test_id, status, duration=None, comment=None, custom=None):     
         
-        if (test_id["label"] not in self.execution_data) or (test_id["label"] == ""):
-            return
-        
-        test_suite = self.execution_data[test_id["label"]]
+        test_suite = test_id["config"]
         test_case = test_suite["testResults"][test_id["id"]]
 
         if "status" in test_case:
@@ -648,10 +603,10 @@ class TestProvider:
         if custom:
             test_case["custom"] = custom
 
-        test_suite["summaryCurrent"] += 1
+        test_suite["tmp"]["summaryCurrent"] += 1
 
-        if (test_suite["summaryCurrent"] == test_suite["summaryTotal"]):
-            self.__feedback_process(test_id["label"])
+        if (test_suite["tmp"]["summaryCurrent"] == test_suite["tmp"]["testIndex"]):
+            self.__feedback_process(test_suite)
 
         return comment
 
