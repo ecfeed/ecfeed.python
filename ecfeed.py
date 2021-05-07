@@ -184,19 +184,16 @@ class TestProvider:
             If the generator service resposes with error
         """
         
-        config = self.__configuration_init()
-        self.__configuration_update_main(config, **kwargs)
-
-        request = RequestHelper.prepare_request_data(self.genserver, config)
+        config = self.__configuration_init(**kwargs)
         
         if (config['config']['url']):
-            yield request
+            yield config['config']['request']
             return
 
-        self.__configuration_update_additional(config, **kwargs)
+        config = self.__configuration_update(config, **kwargs)
 
         try:
-            response = RequestHelper.process_request(request, config)
+            response = RequestHelper.process_request_data(config)
 
             for line in response.iter_lines(decode_unicode=True):
                 line = line.decode('utf-8')
@@ -221,17 +218,12 @@ class TestProvider:
 
         except:
             RequestHelper.certificate_remove(config)
-            
-    def __configuration_init(self):
 
-        return {
-            'config' : {}
-        }
+    def __configuration_init(self, **kwargs):
 
-    def __configuration_update_main(self, config, **kwargs):
-
-        update = {
+        config = {
             'config' : {
+                'genServer' : self.genserver,
                 'rawOutput' : kwargs.pop('raw_output', None),
                 'url' : kwargs.pop('url', None)
             },
@@ -245,10 +237,11 @@ class TestProvider:
             'choices' : kwargs.pop('choices', None),
         }
 
-        update['config'].update(config['config'])
-        config.update(update)
+        config['config']['request'] = RequestHelper.prepare_request_data(config)
 
-    def __configuration_update_additional(self, config, **kwargs):
+        return config
+
+    def __configuration_update(self, config, **kwargs):
 
         update = {
             'config' : {
@@ -268,6 +261,8 @@ class TestProvider:
 
         update['config'].update(config['config'])
         config.update(update)
+
+        return config
 
     def __configuration_get_model(self, **kwargs):
 
@@ -292,21 +287,33 @@ class TestProvider:
         except KeyError:
             raise EcFeedError(f"The 'data_source' argument is not defined.")
 
+    def __configuration_append(self, config, path, element, condition=True):
+
+        if not condition:
+            return
+
+        for i in range(len(path) - 1):
+            if path[i] not in config:
+                config[path[i]] = {}
+            config = config[path[i]]
+
+        config[path[-1]] = element
+
     def __response_parse_test_session_id(self, config, test_data):
         
         if 'test_session_id' in test_data:
             if config['config']['feedback'] is True: 
-                self.__feedback_append(config, ['testSessionId'], test_data['test_session_id'])
+                self.__configuration_append(config, ['testSessionId'], test_data['test_session_id'])
 
     def __response_parse_timestamp(self, config, test_data):
         
         if 'timestamp' in test_data:
-            self.__feedback_append(config, ['timestamp'], test_data['timestamp'])
+            self.__configuration_append(config, ['timestamp'], test_data['timestamp'])
 
     def __response_parse_method_info(self, config, test_data):
        
         if 'method_info' in test_data:
-            self.__feedback_append(config, ['method'], test_data['method_info'])
+            self.__configuration_append(config, ['method'], test_data['method_info'])
 
     def __response_parse_method(self, config, test_data):
         
@@ -322,43 +329,23 @@ class TestProvider:
 
     def __response_parse_test_case(self, line, config, test_case):
        
-        self.__feedback_append(config, ['testResults', ('0:' + str(config['config']['testTotal'])), 'data'], line)
+        self.__configuration_append(config, ['testResults', ('0:' + str(config['config']['testTotal'])), 'data'], line)
 
         if (config['testSessionId'] is not None):
-            test_case.append({'config' : config, 'id' : ('0:' + str(config['config']['testTotal'])) })
+            test_handle = TestHandle('0:' + str(config['config']['testTotal']), config) 
+            test_case.append(test_handle)
 
         config['config']['testTotal'] += 1
 
         return test_case
-    
-    def __feedback_append(self, config, path, element, condition=True):
 
-        if not condition:
-            return
+    def generate_nwise(self, **kwargs): return self.nwise(template=None, **kwargs)
 
-        for i in range(len(path) - 1):
-            if path[i] not in config:
-                config[path[i]] = {}
-            config = config[path[i]]
+    def export_nwise(self, **kwargs): return self.nwise(template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
 
-        config[path[-1]] = element
+    def generate_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', 2), template=None, **kwargs)
 
-    def __feedback_process(self, config):
-
-        RequestHelper.process_request(RequestHelper.prepare_feedback_address(self.genserver), config, RequestHelper.prepare_feedback_body(config))
-        RequestHelper.certificate_remove(config)
-
-    def generate_nwise(self, **kwargs): 
-        return self.nwise(template=None, **kwargs)
-
-    def export_nwise(self, **kwargs): 
-        return self.nwise(template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
-
-    def generate_pairwise(self, **kwargs): 
-        return self.nwise(n=kwargs.pop('n', 2), template=None, **kwargs)
-
-    def export_pairwise(self, **kwargs): 
-        return self.nwise(n=kwargs.pop('n', 2), template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
+    def export_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', 2), template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
 
     def nwise(self, **kwargs):
         """A convenient way to call nwise generator. 
@@ -578,30 +565,6 @@ class TestProvider:
         
         return header
 
-    def feedback(self, test_id, status, duration=None, comment=None, custom=None):     
-        
-        test_suite = test_id["config"]
-        test_case = test_suite["testResults"][test_id["id"]]
-
-        if "status" in test_case:
-            return comment
-
-        test_case["status"] = "P" if status else "F"
-        
-        if duration:
-            test_case["duration"] = duration
-        if comment:
-            test_case["comment"] = comment
-        if custom:
-            test_case["custom"] = custom
-
-        test_suite['config']['testCurrent'] += 1
-
-        if (test_suite['config']['testCurrent'] == test_suite['config']['testTotal']):
-            self.__feedback_process(test_suite)
-
-        return comment
-
     def __response_parse_line(self, line):
         result = {}
 
@@ -665,13 +628,45 @@ class TestProvider:
 
 class TestHandle:
 
-    config = ''
-
     def __init__(self, id, config):
         self.config = config      
         self.id = id  
 
+    def feedback(self, status, duration=None, comment=None, custom=None):
+        test_case = self.config["testResults"][self.id]
+
+        if "status" in test_case:
+            return comment
+
+        test_case["status"] = "P" if status else "F"
+        
+        if duration:
+            test_case["duration"] = duration
+        if comment:
+            test_case["comment"] = comment
+        if custom:
+            test_case["custom"] = custom
+
+        self.config['config']['testCurrent'] += 1
+
+        if (self.config['config']['testCurrent'] == self.config['config']['testTotal']):
+            RequestHelper.process_request_feedback(self.config)
+
+        return comment
+
 class RequestHelper:
+
+    @staticmethod
+    def process_request_data(config):
+        
+        return RequestHelper.process_request(config['config']['request'], config)
+
+    @staticmethod
+    def process_request_feedback(config):
+        status = RequestHelper.process_request(RequestHelper.prepare_feedback_address(config), config, RequestHelper.prepare_feedback_body(config))
+        RequestHelper.certificate_remove(config)
+
+        return status
 
     @staticmethod
     def process_request(request, config, body=''):
@@ -728,7 +723,7 @@ class RequestHelper:
             remove(certificate["key"])
 
     @staticmethod
-    def prepare_request_data(genserver, config) -> str:
+    def prepare_request_data(config) -> str:
         user_data={}
         
         user_data['dataSource'] = repr(config['dataSource'])
@@ -751,7 +746,7 @@ class RequestHelper:
         else:
             request_type='requestData'
         
-        request = genserver + '/testCaseService?'
+        request = config['config']['genServer'] + '/testCaseService?'
         
         request += 'requestType=' + request_type 
         request += '&client=python'
@@ -761,9 +756,9 @@ class RequestHelper:
         return request
 
     @staticmethod
-    def prepare_feedback_address(genserver) -> str:
+    def prepare_feedback_address(config) -> str:
 
-        return genserver + '/streamFeedback?client=python'
+        return config['config']['genServer'] + '/streamFeedback?client=python'
 
     @staticmethod
     def prepare_feedback_body(config) -> str:

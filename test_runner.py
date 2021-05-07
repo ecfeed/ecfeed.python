@@ -21,8 +21,8 @@ def condition_1(a, b, c, d, e, f, g, h, i, j):
 
 @pytest.mark.parametrize(ecfeed.test_header(method1, feedback=True), ecfeed.nwise(method=method1, feedback=True))
 def test_method_1a(a, b, c, d, e, f, g, h, i, j, test_id):
-    assert condition_1(a, b, c, d, e, f, g, h, i, j), ecfeed.feedback(test_id, False, duration=random.randint(10, 990))
-    ecfeed.feedback(test_id, True, comment='OK')
+    assert condition_1(a, b, c, d, e, f, g, h, i, j), test_id.feedback(False, duration=random.randint(10, 990))
+    test_id.feedback(True, comment='OK')
 
 # @pytest.mark.parametrize(ecfeed.test_header(method1, feedback=True), ecfeed.random(method=method1, feedback=True, length=random.randint(100, 500)))
 # def test_method_2a(a, b, c, d, e, f, g, h, i, j, test_id):
