@@ -22,7 +22,7 @@ def __default_keystore_path():
             return keystore_path
     return keystore_path
 
-DEFAULT_GENSERVER = 'https://localhost:8090' if LOCALHOST else 'https://develop-gen.ecfeed.com'
+DEFAULT_GENSERVER = 'https://localhost:8090' if LOCALHOST else 'https://gen.ecfeed.com'
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
 DEFAULT_KEYSTORE_PASSWORD = 'changeit'
 
@@ -678,8 +678,8 @@ class RequestHelper:
         response = ''
 
         if not request.startswith('https://'):
-            print('The address should always start with https')
-            raise EcFeedError('The address should always start with https')
+            print('The address should always start with https://.')
+            raise EcFeedError('The address should always start with https://.')
 
         try:
             certificate = config['config']['certificate']
@@ -687,11 +687,16 @@ class RequestHelper:
         except requests.exceptions.RequestException as e:
             print('The generated request is erroneous: ' + e.request.__dict__)
             raise EcFeedError('The generated request is erroneous: ' + e.request.url)
+        except Exception:
+            print('The server could not process the request. Check if the package/class/method is correct and you have required privileges.')
+            raise EcFeedError('The server could not process the request.')
 
         if (response.status_code != 200):
             print('Error: ' + str(response.status_code))
+
             for line in response.iter_lines(decode_unicode=True):
                 print(line)
+            
             raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
 
         return response
