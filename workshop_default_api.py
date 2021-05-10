@@ -12,7 +12,7 @@ configuration = {
     "endpoint": "https://api.ecfeed.com/"
 }
 
-ecfeed = TestProvider(model='KY3O-03EQ-EWBT-49UH-UR90')
+ecfeed = TestProvider(model='PZS2-W9NH-FRGZ-LZ4N-VGMR')
 method = 'com.example.test.Demo.typeString'
 
 # ---------------------------------------------------------
@@ -51,19 +51,19 @@ def process_request(Country, Name, Address, Product, Color, Size, Quantity, Paym
         }
     }
 
-def process_response(response, test_id):
+def process_response(response, test_handle):
     
-    assert len(response["error"]["input"]) == 0, ecfeed.feedback(test_id, False, duration=response["time"], comment=''.join('- ' + e + ' ' for e in response["error"]["input"]), custom={'Error type': 'Input'})
-    assert len(response["error"]["output"]) == 0, ecfeed.feedback(test_id, False, duration=response["time"], comment=''.join('- ' + e + ' ' for e in response["error"]["output"]), custom={'Error type': 'Output'})
+    assert len(response["error"]["input"]) == 0, test_handle.add_feedback(False, duration=response["time"], comment=''.join('- ' + e + ' ' for e in response["error"]["input"]), custom={'Error type': 'Input'})
+    assert len(response["error"]["output"]) == 0, test_handle.add_feedback(False, duration=response["time"], comment=''.join('- ' + e + ' ' for e in response["error"]["output"]), custom={'Error type': 'Output'})
     
-    ecfeed.feedback(test_id, True, duration=response["time"])
+    test_handle.add_feedback(True, duration=response["time"])
 
 # ---------------------------------------------------------
 
 @pytest.mark.parametrize(ecfeed.test_header(method, feedback=True), ecfeed.nwise(method=method, feedback=True))
-def test_method_nwise(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_id):
+def test_method_nwise(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle):
 
     response = process_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email)
-    process_response(response, test_id)
+    process_response(response, test_handle)
 
     

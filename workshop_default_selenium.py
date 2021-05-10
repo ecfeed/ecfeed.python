@@ -21,7 +21,7 @@ form = {
     "input": [["name", "address", "quantity", "phone", "email"], ["country", "product", "color", "size", "payment", "delivery"]]
 }
 
-ecfeed = TestProvider(model='KY3O-03EQ-EWBT-49UH-UR90')
+ecfeed = TestProvider(model='PZS2-W9NH-FRGZ-LZ4N-VGMR')
 method = 'com.example.test.Demo.typeString'
 
 driver = webdriver.Firefox()
@@ -85,11 +85,11 @@ def set_selenium_form(Country, Name, Address, Product, Color, Size, Quantity, Pa
         "time": int(1000 * (timeEnd - timeStart))
     }
 
-def process_selenium_results(response, test_id):
+def process_selenium_results(response, test_handle):
     
-    assert response["response"][0] == " Request accepted", ecfeed.feedback(test_id, False, duration=response["time"], comment=''.join(e + ' ' for e in response["response"]), custom={'Error type': 'Output'})
+    assert response["response"][0] == " Request accepted", test_handle.add_feedback(False, duration=response["time"], comment=''.join(e + ' ' for e in response["response"]), custom={'Error type': 'Output'})
     
-    ecfeed.feedback(test_id, True, duration=response["time"])
+    test_handle.add_feedback(True, duration=response["time"])
 
 # ---------------------------------------------------------
 
@@ -100,11 +100,11 @@ def setup():
     driver.close()
 
 @pytest.mark.parametrize(ecfeed.test_header(method, feedback=True), ecfeed.nwise(method=method, feedback=True))
-def test_method_random(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_id):
+def test_method_random(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle):
 
-    response = set_selenium_form(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_id)
+    response = set_selenium_form(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle)
     time.sleep(1)
-    process_selenium_results(response, test_id)
+    process_selenium_results(response, test_handle)
 
     
     

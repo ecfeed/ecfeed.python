@@ -11,7 +11,7 @@ import time
 
 import importlib
 
-LOCALHOST = True
+LOCALHOST = False
 
 def __default_keystore_path():
     keystore_paths = \
@@ -26,31 +26,7 @@ DEFAULT_GENSERVER = 'https://localhost:8090' if LOCALHOST else 'https://develop-
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
 DEFAULT_KEYSTORE_PASSWORD = 'changeit'
 
-class EcFeedError(Exception):
-    pass
-
-class TemplateType(Enum):
-    """Built-in export templates
-    """
-
-    CSV = 1
-    XML = 2
-    Gherkin = 3
-    JSON = 4
-    RAW = 99
-
-    def __str__(self):
-        return self.name
-
-def parse_template(template):
-    if template == str(TemplateType.CSV): return TemplateType.CSV
-    elif template == str(TemplateType.JSON): return TemplateType.JSON
-    elif template == str(TemplateType.Gherkin): return TemplateType.Gherkin
-    elif template == str(TemplateType.XML): return TemplateType.XML
-    elif template == str(TemplateType.RAW): return TemplateType.RAW
-    return None
-
-DEFAULT_TEMPLATE = TemplateType.CSV
+class EcFeedError(Exception): pass
 
 class DataSource(Enum):
     STATIC_DATA = 0
@@ -83,6 +59,35 @@ class DataSource(Enum):
             return 'Cartesian'
         if self == DataSource.RANDOM:
             return 'Random'
+
+class TemplateType(Enum):
+    """Built-in export templates
+    """
+
+    CSV = 1
+    XML = 2
+    Gherkin = 3
+    JSON = 4
+    RAW = 99
+
+    def __str__(self):
+        return self.name
+
+    @staticmethod
+    def parse_template(template):
+        if template == str(TemplateType.CSV): return TemplateType.CSV
+        elif template == str(TemplateType.JSON): return TemplateType.JSON
+        elif template == str(TemplateType.Gherkin): return TemplateType.Gherkin
+        elif template == str(TemplateType.XML): return TemplateType.XML
+        elif template == str(TemplateType.RAW): return TemplateType.RAW
+        return None
+
+DEFAULT_TEMPLATE = TemplateType.CSV
+DEFAULT_N = 2
+DEFAULT_COVERAGE = 100
+DEFAULT_ADAPTIVE = True
+DEFAULT_DUPLICATES = False
+DEFAULT_LENGTH = 1
 
 class TestProvider:
     '''Access provider to ecFeed remote generator services
@@ -343,9 +348,9 @@ class TestProvider:
 
     def export_nwise(self, **kwargs): return self.nwise(template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
 
-    def generate_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', 2), template=None, **kwargs)
+    def generate_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', DEFAULT_N), template=None, **kwargs)
 
-    def export_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', 2), template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
+    def export_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', DEFAULT_N), template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
 
     def nwise(self, **kwargs):
         """A convenient way to call nwise generator. 
@@ -376,8 +381,8 @@ class TestProvider:
         """
 
         properties={}
-        properties['n'] = str(kwargs.pop('n', 2))
-        properties['coverage'] = str(kwargs.pop('coverage', 100))
+        properties['n'] = str(kwargs.pop('n', DEFAULT_N))
+        properties['coverage'] = str(kwargs.pop('coverage', DEFAULT_COVERAGE))
         kwargs['properties'] = properties
 
         yield from self.generate(data_source=DataSource.NWISE, **kwargs)
@@ -409,7 +414,7 @@ class TestProvider:
         """
 
         properties={}
-        properties['coverage'] = str(kwargs.pop('coverage', 100))
+        properties['coverage'] = str(kwargs.pop('coverage', DEFAULT_COVERAGE))
 
         yield from self.generate(data_source=DataSource.CARTESIAN, **kwargs)
 
@@ -446,9 +451,9 @@ class TestProvider:
         """
 
         properties={}
-        properties['adaptive'] = str(kwargs.pop('adaptive', True)).lower()
-        properties['duplicates'] = str(kwargs.pop('duplicates', False)).lower()
-        properties['length'] = str(kwargs.pop('length', 1))
+        properties['adaptive'] = str(kwargs.pop('adaptive', DEFAULT_ADAPTIVE)).lower()
+        properties['duplicates'] = str(kwargs.pop('duplicates', DEFAULT_DUPLICATES)).lower()
+        properties['length'] = str(kwargs.pop('length', DEFAULT_LENGTH))
 
         yield from self.generate(data_source=DataSource.RANDOM, properties=properties, **kwargs)
 
@@ -561,7 +566,7 @@ class TestProvider:
         header = self.method_arg_names(method_name=method_name)
 
         if feedback:
-            header.append("test_id")
+            header.append("test_handle")
         
         return header
 
@@ -632,7 +637,7 @@ class TestHandle:
         self.config = config      
         self.id = id  
 
-    def feedback(self, status, duration=None, comment=None, custom=None):
+    def add_feedback(self, status, duration=None, comment=None, custom=None):
         test_case = self.config["testResults"][self.id]
 
         if "status" in test_case:
