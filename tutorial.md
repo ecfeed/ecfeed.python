@@ -176,12 +176,13 @@ def test_method_1b(arg1, arg2, arg3, test_handle):
     test_handle.add_feedback(True)
 ```
 
-To the 'test_header' method an additional argument, i.e. 'feedback=True', must be added. The same applies to any of the generation methods. Afterwards, in the parameter list, the 'test_handle' class must be included. It consists of one method, namely 'add_feedback'. The required argument denotes the result of the test, everything else is optional.
+To the 'test_header' method an additional argument, i.e. 'feedback=True', must be added. The same applies to any of the generation methods. Afterwards, in the parameter list, the 'test_handle' class must be included. It consists of one public method, namely 'add_feedback'. The required argument denotes the result of the test, everything else is optional.
+
 ```python
 test_handle.add_feedback(True, comment='Passed', duration=1000 , custom={'key1': 'value1'})
 ```
 
-_condition_ - The result of the test.
+_status_ - The result of the test.
 _comment_ - The optional description of the execution.
 _duration_ - The optional execution time in milliseconds.
 _custom_ - The optional dictionary of custom key-value pairs.
