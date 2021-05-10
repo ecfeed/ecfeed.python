@@ -1,26 +1,27 @@
 ## Introduction
 
-This is a short description of python library to access ecfeed online service. For the latest and full documentation
+This is a short description of the Python library to access the ecFeed online service. For the latest and full documentation
 of the ecfeed module, please refer to the docstring of the ecfeed module or check the sources directly at 
 [github](https://github.com/ecfeed/ecfeed.python).
 
 ## Requirements
 
-The module was developed and tested against python 3.6. In theory it should work with earlier versions of python as well.
+The module was developed and tested against Python 3.6. In theory, it should work with earlier versions of Python as well.
 
 ## Installation
 
-EcFeed module is hosted at pypi.org and can be simply downloaded with `pip` command:
+EcFeed module is hosted at pypi.org and can be simply downloaded with the `pip` command:
 
 ```bash
 pip install ecfeed
 ```
+
 ## Some examples 
 
-The examples assume that the user has a valid keystore downloaded to '.ecfeed' folder ('ecfeed' in Windows) in his home directory and the accessed model contains called methods. The method should be available in a welcome model created at registration at ecfeed.com. If the model is not there it can be imported from [here](https://s3-eu-west-1.amazonaws.com/resources.ecfeed.com/repo/tutorial/Welcome.ect).
+The examples assume that the user has a valid keystore downloaded to the '.ecfeed' folder ('ecfeed' in Windows) in his home directory and the accessed model contains called methods. The method should be available in a welcome model created at registration at ecfeed.com. If the model is not there, it can be imported from [here](https://s3-eu-west-1.amazonaws.com/resources.ecfeed.com/repo/tutorial/Welcome.ect).
 ```python
 >>> from ecfeed import TestProvider, DataSource, TemplateType
->>> ecfeed = TestProvider(model='0168-4412-8644-9433-6380')#change model id to your model
+>>> ecfeed = TestProvider(model='0168-4412-8644-9433-6380') #change model id to your model
 >>> for line in ecfeed.export_nwise(method='QuickStart.test', n=3, template=TemplateType.Gherkin, coverage=10):
 ...		print(line)
 ...
@@ -57,7 +58,7 @@ for line in ecfeed.export_static_suite(method='TestClass.method', test_suites=['
  
  ## pytest
 
- Pytest is one of most popular testing frameworks for python, and luckily it supports parameterized tests. Even more luckily, the format returned by ecfeed's TestProvider generators is directly usable for pydoc tests. And by some crazy coincidence, the util functions in TestProvider class can be used in pydoc's decorator to provide argument names:
+ Pytest is one of most popular testing frameworks for Python, and luckily, it supports parameterized tests. Even more luckily, the format returned by ecFeed's TestProvider generators is directly usable for pydoc tests. And by some crazy coincidence, the util functions in TestProvider class can be used in pydoc's decorator to provide argument names:
 
 ```python
 class TestedClass:
@@ -66,17 +67,16 @@ class TestedClass:
 		print('method(' + str(arg1) + ', ' + str(arg2) + ', ' + str(arg3) + ')')
 ```
 
- 
 ## TestProvider class API
 
-The ecfeed python module provides connectivity with the ecFeed online test generation service using the class TestProvider. The class needs a keystore generated at ecfeed.com page to authenticate and identify the user at the gen service. 
+The ecFeed Python module provides connectivity with the ecFeed online test generation service using the class TestProvider. The class needs a keystore generated at ecfeed.com page to authenticate and identify the user at the generator service. 
 
 ### Constructor
 
 _TestProvider_ constructor takes 4 optional arguments:
 
-_genserver_- The url to the ecfeed generator service. By default it is _gen,ecfeed.com_ and this should be fine with most cases.
-_keystore_path_ - The path to a keystore downloaded from ecfeed.com (the Settings->Security page). The keystore contains user's certificate that is used to identify and authenticate the user at the generator service. Also, it contains generator's public key to validate the generator. By default the constructor looks for the keystore in `~/.ecfeed/security.p12`, except for Windows, where the default path is `$HOME/ecfeed/security.p12`
+_genserver_ - The url to the ecfeed generator service. By default it is _gen,ecfeed.com_ and this should be fine with most cases.
+_keystore_path_ - The path to a keystore downloaded from ecfeed.com (the Settings->Security page). The keystore contains the user's certificate that is used to identify and authenticate the user at the generator service. Also, it contains the generator's public key to validate the generator. By default the constructor looks for the keystore in `~/.ecfeed/security.p12`, except for Windows, where the default path is `$HOME/ecfeed/security.p12`.
 _password_ - Keystore password. The default value is 'changeit' and this is the password used to encrypt the keystore downloaded from ecfeed.com, so if it wasn't changed, the default value should be fine.
 _model_ - The model id. The model id is a 20 digit number (grouped by 4) that can be found in the _My projects_ page at ecfeed.com under each model. It is also in an url of the model editor page opened on a model. By default it is `None`.
 
@@ -95,13 +95,13 @@ TestProvider provides 9 generator functions to access ecfeed generator service. 
 #### export_nwise(method, **kwargs) / generate_nwise(method, **kwargs)
 
 A convenient way to call nwise generator. 
-_method_ - Full name (including full class path) of the method that will be used for generation. Method parameters are not required. If parameters are not provided, the generator will generate data from the first method it finds with that name
+_method_ - Full name (including full class path) of the method that will be used for generation. Method parameters are not required. If parameters are not provided, the generator will generate data from the first method it finds with that name.
 
 _n_ - The 'N' in NWise. Default is 2
 
 _coverage_ - The percent of N-tuples that the generator will try to cover. Default is 100%
 
-_template_ - Template to be used when exporting data to text. If a function with the prefix `generate_` is invoked, data is always casted to argument type (regardless of the value of the template). Templates are defined by _TemplateType_ enum (supported values are CSV, JSON, Gherkin and XML). Check the docstring for ecfeed.TemplateType (`pydoc.doc(ecfeed.TemplateType)`) to check all supported export templates. Default is 'CSV'.
+_template_ - Template to be used when exporting data to text. If a function with the prefix `generate_` is invoked, data is always casted to argument type (regardless of the value of the template). Templates are defined by _TemplateType_ enum (supported values are CSV, JSON, Gherkin and XML). Check the docstring for ecFeed TemplateType (`pydoc.doc(ecfeed.TemplateType)`) to check all supported export templates. Default is 'CSV'.
 
 _choices_ - Dictionary. The keys are names of method parameters. The values define list of choices that will be used for these parameters in the generation. If an argument is skipped in the dictionary, all defined choices will be used. For example: `choices={'arg1' : [choice1, choice2], 'arg2' : [choice3]}`.
 
@@ -113,15 +113,16 @@ If a template was not provided, the function yields tuples of values casted to t
 
 If the generator service responses with error, the function raises _EcFeedError_ exception.
 
-
 #### export_pairwise(method, **kwargs) / generate_pairwise(method, **kwargs)
 
 Calls nwise with n=2. For people that like being explicit. Uses the same arguments that _nwise_, excluding 'n'.
 
 #### export_cartesian(method, **kwargs) / generate_cartesian(method, **kwargs)
+
 Generates all possible combinations of parameters (considering constraints). Uses the same parameters that _nwise_, except 'n'.
 
 #### export_random(method, **kwargs) / generate_random(method, **kwargs)
+
 Generates random combinations of method choices.
 
 _method_ - see '_nwise_'.
@@ -134,9 +135,11 @@ _duplicates_ - If two identical tests are allowed to be generated. If set to fal
 _adaptive_ - If set to true, the generator will try to provide tests that are farthest (in Hamming distance) from the ones already generated.
 
 ### Other functions
+
 Some other functions are provided to facilitate using TestProvider directly as data source in test frameworks like pytest.
 
 #### method_info(method, model=None)
+
 Queries generator service for information about the method. Returns a dictionary with following entries:
 
 _package_name_ - the package of the method, eg. 'com.example',
@@ -145,16 +148,44 @@ _method_nam_ - full name of the method. Repeated from the argument,
 _args_ - a list of tuples containing type and name of arguments, eg. '[[int, arg1], [String, arg2]]'.
 
 #### method_arg_names(method_info=None, method_name=None)
+
 Returns list of argument names of the method.
 
 _method_info_  - If provided, the method parses this dictionary for names of the method arguments.
 _method_name_ - If method_info not provided, this function first calls method_info(method_name), and then recursively calls itself with the result.
 
 #### method_arg_types(self, method_info=None, method_name=None):
+
 Returns list of argument types of the method.
 
 _method_info_ - see _method_arg_names_.
 _method_name_ - see _method_arg_names_.
 
+### Feedback
 
+To send feedback, you need to have a BASIC account type or be a member of a TEAM.  
 
+An example looks as follows:
+```python
+ecfeed = TestProvider(model='LRXC-015K-GJB0-2A9F-CGA2')
+method = 'QuickStart.test'
+
+@pytest.mark.parametrize(ecfeed.test_header(method, feedback=True), ecfeed.random(method=method, length=20, feedback=True))
+def test_method_1b(arg1, arg2, arg3, test_handle):
+    assert arg1 < 2, test_handle.add_feedback(False)
+    test_handle.add_feedback(True)
+```
+
+To the 'test_header' method an additional argument, i.e. 'feedback=True', must be added. The same applies to any of the generation methods. Afterwards, in the parameter list, the 'test_handle' class must be included. It consists of one method, namely 'add_feedback'. The required argument denotes the result of the test, everything else is optional.
+```python
+test_handle.add_feedback(True, comment='Passed', duration=1000 , custom={'key1': 'value1'})
+```
+
+_condition_ - The result of the test.
+_comment_ - The optional description of the execution.
+_duration_ - The optional execution time in milliseconds.
+_custom_ - The optional dictionary of custom key-value pairs.
+
+Additionally, to the test generation method one optional argument can be added, namely 'label'. It provides a short description of the generated test suite.  
+
+Note, that each test must return a feedback, regardless whether it has passed or failed.  

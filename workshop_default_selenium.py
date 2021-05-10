@@ -69,14 +69,14 @@ def get_response():
     
 # ---------------------------------------------------------
 
-def set_selenium_form(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_id):
+def set_selenium_form(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle):
     timeStart = time.time()
 
     try:
         set_form([[Name, Address, Quantity, Phone, Email], [Country, Product, Color, Size, Payment, Delivery]])
         execute()
     except NoSuchElementException as err:
-        assert False, ecfeed.feedback(test_id, False, comment=err.msg, custom={'Error type': 'Input'})
+        assert False, test_handle.add_feedback(False, comment=err.msg, custom={'Error type': 'Input'})
     
     timeEnd = time.time()
 
