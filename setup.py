@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="ecfeed", 
+    name="ecfeedTEST002", 
     version="2.0.1",
     author="EcFeed AS",
     author_email="mail@ecfeed.com",
