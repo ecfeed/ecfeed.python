@@ -2,14 +2,14 @@ import pytest
 from ecfeed import TestProvider, TemplateType, DataSource
 from enum import Enum
 
-ecfeed = TestProvider(model='2037-6847-2110-8251-1296')
+ecfeed = TestProvider(model='2057-8093-8471-3697-1154')
 
 #################### access to generators in python code #####################
 #### NWISE ####
-# for line in ecfeed.generate_nwise(method='TestClass.method', n=3, coverage=40):
-#     print(line)
-# for line in ecfeed.export_nwise(method='TestClass.method', n=3, template=TemplateType.Gherkin, coverage=40):
-#     print(line)
+for line in ecfeed.generate_nwise(method='com.example.test.TestClass2.testMethod2', n=3, coverage=40):
+    print(line)
+for line in ecfeed.export_nwise(method='com.example.test.TestClass2.testMethod2', n=3, coverage=40):
+    print(line)
 
 #### PAIRWISE ####
 # for line in ecfeed.generate_pairwise(method='TestClass.method', coverage=10, constraints='NONE'):

@@ -7,45 +7,26 @@ import tempfile
 import json
 from enum import Enum
 import sys
+import time
 
 import importlib
 
+LOCALHOST = False
+
 def __default_keystore_path():
-    keystore_paths = [path.expanduser('~/.ecfeed/security.p12'), path.expanduser('~/ecfeed/security.p12')]
+    keystore_paths = \
+        [path.expanduser('~/.ecfeed/localhost.p12'), path.expanduser('~/ecfeed/localhost.p12')] if LOCALHOST else \
+        [path.expanduser('~/.ecfeed/security.p12'), path.expanduser('~/ecfeed/security.p12')]    
     for keystore_path in keystore_paths:
         if path.exists(keystore_path):
             return keystore_path
     return keystore_path
 
-DEFAULT_GENSERVER = 'gen.ecfeed.com'
+DEFAULT_GENSERVER = 'https://localhost:8090' if LOCALHOST else 'https://gen.ecfeed.com'
 DEFAULT_KEYSTORE_PATH = __default_keystore_path()
 DEFAULT_KEYSTORE_PASSWORD = 'changeit'
 
-class EcFeedError(Exception):
-    pass
-
-class TemplateType(Enum):
-    """Built-in export templates
-    """
-
-    CSV = 1
-    XML = 2
-    Gherkin = 3
-    JSON = 4
-    RAW = 99
-
-    def __str__(self):
-        return self.name
-
-def parse_template(template):
-    if template == str(TemplateType.CSV): return TemplateType.CSV
-    elif template == str(TemplateType.JSON): return TemplateType.JSON
-    elif template == str(TemplateType.Gherkin): return TemplateType.Gherkin
-    elif template == str(TemplateType.XML): return TemplateType.XML
-    elif template == str(TemplateType.RAW): return TemplateType.RAW
-    return None
-
-DEFAULT_TEMPLATE = TemplateType.CSV
+class EcFeedError(Exception): pass
 
 class DataSource(Enum):
     STATIC_DATA = 0
@@ -68,6 +49,46 @@ class DataSource(Enum):
         if self == DataSource.RANDOM:
             return 'genRandom'
 
+    def to_feedback_param(self):
+        if self == DataSource.STATIC_DATA:
+            return 'Static'
+        if ((self == DataSource.NWISE) or \
+            (self == DataSource.PAIRWISE)):
+            return 'NWise'
+        if self == DataSource.CARTESIAN:
+            return 'Cartesian'
+        if self == DataSource.RANDOM:
+            return 'Random'
+
+class TemplateType(Enum):
+    """Built-in export templates
+    """
+
+    CSV = 1
+    XML = 2
+    Gherkin = 3
+    JSON = 4
+    RAW = 99
+
+    def __str__(self):
+        return self.name
+
+    @staticmethod
+    def parse_template(template):
+        if template == str(TemplateType.CSV): return TemplateType.CSV
+        elif template == str(TemplateType.JSON): return TemplateType.JSON
+        elif template == str(TemplateType.Gherkin): return TemplateType.Gherkin
+        elif template == str(TemplateType.XML): return TemplateType.XML
+        elif template == str(TemplateType.RAW): return TemplateType.RAW
+        return None
+
+DEFAULT_TEMPLATE = TemplateType.CSV
+DEFAULT_N = 2
+DEFAULT_COVERAGE = 100
+DEFAULT_ADAPTIVE = True
+DEFAULT_DUPLICATES = False
+DEFAULT_LENGTH = 1
+
 class TestProvider:
     '''Access provider to ecFeed remote generator services
 
@@ -81,7 +102,7 @@ class TestProvider:
 
     model = ''
 
-    def __init__(self, genserver = DEFAULT_GENSERVER, 
+    def __init__(self, genserver=DEFAULT_GENSERVER, 
                  keystore_path=DEFAULT_KEYSTORE_PATH, 
                  password=DEFAULT_KEYSTORE_PASSWORD,
                  model=None):
@@ -103,11 +124,10 @@ class TestProvider:
             id of the default model used by generators
 
         '''
-        
-        self.genserver = genserver
+        self.genserver = genserver      
         self.model = model
         self.keystore_path = path.expanduser(keystore_path)
-        self.password = password
+        self.password = password    
 
     def generate(self, **kwargs):
         """Generic call to ecfeed generator service
@@ -168,82 +188,169 @@ class TestProvider:
         EcFeedError
             If the generator service resposes with error
         """
-
-        try:
-            method = kwargs.pop('method')
-            data_source = kwargs.pop('data_source')
-        except KeyError as e:
-            raise EcFeedError(f"missing required argument: {e}.")
-
-        model = kwargs.pop('model', self.model)
-        template = kwargs.pop('template', None)
-        raw_output = False
-        if 'raw_output' in kwargs or template == TemplateType.RAW:
-            raw_output = True
-        if template == TemplateType.RAW: 
-            template = None
-
-
-        request = self.__prepare_request(genserver=self.genserver, 
-                            model=model, method=method, 
-                            data_source=data_source, template=template, 
-                            **kwargs)
-
-        # print(f'request:{request}')
-        if(kwargs.pop('url', None)):
-            yield request
+        
+        config = self.__configuration_init(**kwargs)
+        
+        if (config['config']['url']):
+            yield config['config']['request']
             return
 
-        with open(self.keystore_path, 'rb') as keystore_file:
-            keystore = crypto.load_pkcs12(keystore_file.read(), self.password.encode('utf8'))
-
-        key = crypto.dump_privatekey(crypto.FILETYPE_PEM, keystore.get_privatekey())      
-        cert = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_certificate())
-        ca = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_ca_certificates()[0])
-
-        with tempfile.NamedTemporaryFile(delete=False) as temp_cert_file: 
-            temp_cert_file.write(cert)
-        with tempfile.NamedTemporaryFile(delete=False) as temp_pkey_file: 
-            temp_pkey_file.write(key)
-        with tempfile.NamedTemporaryFile(delete=False) as temp_ca_file:
-            temp_ca_file.write(ca)
+        config = self.__configuration_update(config, **kwargs)
 
         try:
-            response = requests.get(request, verify=temp_ca_file.name, cert=(temp_cert_file.name, temp_pkey_file.name), stream=True)
-            if(response.status_code != 200):
-                print('Error: ' + str(response.status_code))
-                raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
-            else:
-                args_info = {}
-                for line in response.iter_lines(decode_unicode=True):
-                    line = line.decode('utf-8')
-                    if template != None:
-                        yield line
-                    elif raw_output:
-                        yield line
-                    else:
-                        test_data = self.__parse_test_line(line=line)
-                        if 'method' in test_data:
-                            args_info = test_data['method']
-                        if 'values' in test_data:
-                            yield  [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in args_info['args']]))]
+            response = RequestHelper.process_request_data(config)
 
-        finally:
-            remove(temp_cert_file.name)
-            remove(temp_pkey_file.name)
-            remove(temp_ca_file.name)
+            for line in response.iter_lines(decode_unicode=True):
+                line = line.decode('utf-8')
 
-    def generate_nwise(self, **kwargs): 
-        return self.nwise(template=None, **kwargs)
+                test_case = None
+                raw_type = ((config['template'] is not None) and (config['template'] is not TemplateType.RAW)) or config['config']['rawOutput']
 
-    def export_nwise(self, **kwargs): 
-        return self.nwise(template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
+                if raw_type and (config['testSessionId'] is None):
+                    yield line
+                elif raw_type:
+                    test_case = [str(line)]
+                else:
+                    test_data = self.__response_parse_line(line=line) 
+                    self.__response_parse_test_session_id(config, test_data)
+                    self.__response_parse_timestamp(config, test_data)
+                    self.__response_parse_method_info(config, test_data)
+                    self.__response_parse_method(config, test_data)
+                    test_case = self.__response_parse_values(config, test_data)
+                
+                if test_case is not None:
+                    yield self.__response_parse_test_case(line, config, test_case)
 
-    def generate_pairwise(self, **kwargs): 
-        return self.nwise(n=kwargs.pop('n', 2), template=None, **kwargs)
+        except:
+            RequestHelper.certificate_remove(config)
 
-    def export_pairwise(self, **kwargs): 
-        return self.nwise(n=kwargs.pop('n', 2), template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
+    def __configuration_init(self, **kwargs):
+
+        config = {
+            'config' : {
+                'genServer' : self.genserver,
+                'rawOutput' : kwargs.pop('raw_output', None),
+                'url' : kwargs.pop('url', None)
+            },
+            'properties' : kwargs.pop('properties', None),
+            'dataSource' : self.__configuration_get_data_source(**kwargs),
+            'template' : kwargs.pop('template', None),
+            'model' : self.__configuration_get_model(**kwargs),
+            'method' : self.__configuration_get_method(**kwargs),
+            'testSuites' : kwargs.pop('test_suites', None),
+            'constraints' : kwargs.pop('constraints', None),
+            'choices' : kwargs.pop('choices', None),
+        }
+
+        config['config']['request'] = RequestHelper.prepare_request_data(config)
+
+        return config
+
+    def __configuration_update(self, config, **kwargs):
+
+        update = {
+            'config' : {
+                'testCurrent' : 0,
+                'testTotal' : 0,
+                'certificate' : RequestHelper.certificate_load(self.keystore_path, self.password),
+                'feedback' : kwargs.pop('feedback', False),
+                'args' : {}
+            },
+            'testSessionId' : None,
+            'framework' : 'Python',
+            'timestamp' : None,
+            'testSessionLabel' : kwargs.pop('label', None),
+            'custom' : kwargs.pop('custom', None),
+            'testResults' : {}
+        }
+
+        update['config'].update(config['config'])
+        config.update(update)
+
+        return config
+
+    def __configuration_get_model(self, **kwargs):
+
+        model = kwargs.pop('model', None)
+
+        if (model == None):
+            model = self.model
+
+        return model
+
+    def __configuration_get_method(self, **kwargs):
+        
+        try:
+            return kwargs.pop('method')
+        except KeyError:
+            raise EcFeedError("The 'method' argument is not defined.")
+
+    def __configuration_get_data_source(self, **kwargs):
+
+        try:
+            return kwargs.pop('data_source')
+        except KeyError:
+            raise EcFeedError(f"The 'data_source' argument is not defined.")
+
+    def __configuration_append(self, config, path, element, condition=True):
+
+        if not condition:
+            return
+
+        for i in range(len(path) - 1):
+            if path[i] not in config:
+                config[path[i]] = {}
+            config = config[path[i]]
+
+        config[path[-1]] = element
+
+    def __response_parse_test_session_id(self, config, test_data):
+        
+        if 'test_session_id' in test_data:
+            if config['config']['feedback'] is True: 
+                self.__configuration_append(config, ['testSessionId'], test_data['test_session_id'])
+
+    def __response_parse_timestamp(self, config, test_data):
+        
+        if 'timestamp' in test_data:
+            self.__configuration_append(config, ['timestamp'], test_data['timestamp'])
+
+    def __response_parse_method_info(self, config, test_data):
+       
+        if 'method_info' in test_data:
+            self.__configuration_append(config, ['method'], test_data['method_info'])
+
+    def __response_parse_method(self, config, test_data):
+        
+        if 'method' in test_data:
+            config['config']['args'] = test_data['method']
+    
+    def __response_parse_values(self, config, test_data):
+        
+        if 'values' in test_data:
+            return [self.__cast(value) for value in list(zip(test_data['values'], [arg[0] for arg in config['config']['args']['args']]))]
+        else:
+            return None
+
+    def __response_parse_test_case(self, line, config, test_case):
+       
+        self.__configuration_append(config, ['testResults', ('0:' + str(config['config']['testTotal'])), 'data'], line)
+
+        if (config['testSessionId'] is not None):
+            test_handle = TestHandle('0:' + str(config['config']['testTotal']), config) 
+            test_case.append(test_handle)
+
+        config['config']['testTotal'] += 1
+
+        return test_case
+
+    def generate_nwise(self, **kwargs): return self.nwise(template=None, **kwargs)
+
+    def export_nwise(self, **kwargs): return self.nwise(template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
+
+    def generate_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', DEFAULT_N), template=None, **kwargs)
+
+    def export_pairwise(self, **kwargs): return self.nwise(n=kwargs.pop('n', DEFAULT_N), template=kwargs.pop('template', DEFAULT_TEMPLATE), **kwargs)
 
     def nwise(self, **kwargs):
         """A convenient way to call nwise generator. 
@@ -274,8 +381,8 @@ class TestProvider:
         """
 
         properties={}
-        properties['n'] = str(kwargs.pop('n', 2))
-        properties['coverage'] = str(kwargs.pop('coverage', 100))
+        properties['n'] = str(kwargs.pop('n', DEFAULT_N))
+        properties['coverage'] = str(kwargs.pop('coverage', DEFAULT_COVERAGE))
         kwargs['properties'] = properties
 
         yield from self.generate(data_source=DataSource.NWISE, **kwargs)
@@ -307,7 +414,7 @@ class TestProvider:
         """
 
         properties={}
-        properties['coverage'] = str(kwargs.pop('coverage', 100))
+        properties['coverage'] = str(kwargs.pop('coverage', DEFAULT_COVERAGE))
 
         yield from self.generate(data_source=DataSource.CARTESIAN, **kwargs)
 
@@ -344,9 +451,9 @@ class TestProvider:
         """
 
         properties={}
-        properties['adaptive'] = str(kwargs.pop('adaptive', True)).lower()
-        properties['duplicates'] = str(kwargs.pop('duplicates', False)).lower()
-        properties['length'] = str(kwargs.pop('length', 1))
+        properties['adaptive'] = str(kwargs.pop('adaptive', DEFAULT_ADAPTIVE)).lower()
+        properties['duplicates'] = str(kwargs.pop('duplicates', DEFAULT_DUPLICATES)).lower()
+        properties['length'] = str(kwargs.pop('length', DEFAULT_LENGTH))
 
         yield from self.generate(data_source=DataSource.RANDOM, properties=properties, **kwargs)
 
@@ -396,15 +503,19 @@ class TestProvider:
         """
 
         info={}
-        for line in self.generate_random(method=method, length=0, raw_output=True, model=model):
+        for line in self.generate_random(method=method, length=0, raw_output=True, model=model, feedback=False):
             line = line.replace('"{', '{').replace('}"', '}').replace('\'', '"')#fix wrong formatting in some versions of the gen-server
+
             try:                
                 parsed = json.loads(line)
             except ValueError as e:
                 print('Unexpected problem when getting method info: ' + str(e))
             if 'info' in parsed :
-                method_name = parsed['info']['method']
-                info = self.__parse_method_definition(method_name)
+                try:
+                    method_name = parsed['info']['method']
+                    info = self.__parse_method_definition(method_name)
+                except TypeError as e:
+                    pass
         return info
  
     def method_arg_names(self, method_info=None, method_name=None):
@@ -451,41 +562,30 @@ class TestProvider:
         elif method_name != None:
             return self.method_arg_types(self.method_info(method=method_name))
 
-    def __prepare_request(self, method, data_source, 
-                          genserver=None, 
-                          model=None,
-                          template=None, **user_data) -> str:
-                          
-        if genserver == None:
-            genserver = self.genserver
-        if model == None:
-            model = self.model
+    def test_header(self, method_name, feedback=False):
+        header = self.method_arg_names(method_name=method_name)
 
-        generate_params={}
-        generate_params['method'] = ''
-        generate_params['method'] += method
-        generate_params['model'] = model
-        generate_params['userData'] = self.__serialize_user_data(data_source=data_source, **user_data)
+        if feedback:
+            header.append("test_handle")
         
-        request_type='requestData'
-        if template != None:
-            generate_params['template'] = str(template)
-            request_type='requestExport'
+        return header
 
-        request = 'https://' + genserver + '/testCaseService?requestType=' + request_type + '&client=python' + '&request='
-        request += json.dumps(generate_params).replace(' ', '')
-        return request
-
-    def __parse_test_line(self, line):
+    def __response_parse_line(self, line):
         result = {}
+
         try:
             parsed_line = json.loads(line)
         except ValueError as e:
             print('Unexpected error while parsing line: "' + line + '": ' + str(e))
+        
         if 'info'  in parsed_line:
             info = parsed_line['info'].replace('\'', '"')
             try:
-                result['method'] = self.__parse_method_definition(json.loads(info)['method'])
+                json_parsed = json.loads(info)
+                result['timestamp'] = int(json_parsed['timestamp'])
+                result['test_session_id'] = json_parsed['testSessionId']
+                result['method_info'] = json_parsed['method']
+                result['method'] = self.__parse_method_definition(result['method_info'])
             except (ValueError, KeyError) as e:
                 pass
         elif 'testCase' in parsed_line:
@@ -495,23 +595,6 @@ class TestProvider:
                 print('Unexpected error when parsing test case line: "' + line + '": ' + str(e))
 
         return result
-
-    def __serialize_user_data(self, data_source, **kwargs):
-        user_data={}
-        user_data['dataSource']=repr(data_source)
-        test_suites=kwargs.pop('test_suites', None)
-        properties=kwargs.pop('properties', None)
-        constraints=kwargs.pop('constraints', None)
-        choices=kwargs.pop('choices', None)
-        if test_suites != None:
-            user_data['testSuites']=test_suites
-        if properties != None:
-            user_data['properties']=properties
-        if constraints != None:
-            user_data['constraints']=constraints
-        if choices != None:
-            user_data['choices']=choices
-        return json.dumps(user_data).replace(' ', '').replace('"', '\'')
 
     def __parse_method_definition(self, method_info_line):
         result={}
@@ -547,8 +630,179 @@ class TestProvider:
                 module = importlib.import_module(module_name)
                 enum_type = getattr(module, type_name)
                 return enum_type[value]
+
+class TestHandle:
+
+    def __init__(self, id, config):
+        self.config = config      
+        self.id = id  
+
+    def add_feedback(self, status, duration=None, comment=None, custom=None):
+        test_case = self.config["testResults"][self.id]
+
+        if "status" in test_case:
+            return comment
+
+        test_case["status"] = "P" if status else "F"
+        
+        if duration:
+            test_case["duration"] = duration
+        if comment:
+            test_case["comment"] = comment
+        if custom:
+            test_case["custom"] = custom
+
+        self.config['config']['testCurrent'] += 1
+
+        if (self.config['config']['testCurrent'] == self.config['config']['testTotal']):
+            RequestHelper.process_request_feedback(self.config)
+
+        return comment
+
+class RequestHelper:
+
+    @staticmethod
+    def process_request_data(config):
+        
+        return RequestHelper.process_request(config['config']['request'], config)
+
+    @staticmethod
+    def process_request_feedback(config):
+        status = RequestHelper.process_request(RequestHelper.prepare_feedback_address(config), config, RequestHelper.prepare_feedback_body(config))
+        RequestHelper.certificate_remove(config)
+
+        return status
+
+    @staticmethod
+    def process_request(request, config, body=''):
+        response = ''
+
+        if not request.startswith('https://'):
+            print('The address should always start with https://.')
+            raise EcFeedError('The address should always start with https://.')
+
+        try:
+            certificate = config['config']['certificate']
+            response = requests.get(request, verify=certificate["server"], cert=(certificate["client"], certificate["key"]), data=body, stream=True)
+        except requests.exceptions.RequestException as e:
+            print('The generated request is erroneous: ' + e.request.__dict__)
+            raise EcFeedError('The generated request is erroneous: ' + e.request.url)
+        except Exception:
+            print('The server could not process the request. Check if the package/class/method is correct and you have required privileges.')
+            raise EcFeedError('The server could not process the request.')
+
+        if (response.status_code != 200):
+            print('Error: ' + str(response.status_code))
+
+            for line in response.iter_lines(decode_unicode=True):
+                print(line)
             
+            raise EcFeedError(json.loads(response.content.decode('utf-8'))['error'])
 
+        return response
 
+    @staticmethod
+    def certificate_load(keystore_path, keystore_password):
 
+        with open(keystore_path, 'rb') as keystore_file:
+            keystore = crypto.load_pkcs12(keystore_file.read(), keystore_password.encode('utf8'))
 
+        server = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_ca_certificates()[0])
+        client = crypto.dump_certificate(crypto.FILETYPE_PEM, keystore.get_certificate())
+        key = crypto.dump_privatekey(crypto.FILETYPE_PEM, keystore.get_privatekey())      
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_server_file:
+            temp_server_file.write(server)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_client_file: 
+            temp_client_file.write(client)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_key_file: 
+            temp_key_file.write(key)
+        
+        return { "server" : False if LOCALHOST else temp_server_file.name, "client" : temp_client_file.name, "key" : temp_key_file.name }   
+
+    @staticmethod
+    def certificate_remove(config):
+
+        certificate = config['config']['certificate']
+        
+        if not isinstance(certificate["server"], bool):
+            remove(certificate["server"])
+        if not isinstance(certificate["client"], bool):
+            remove(certificate["client"])
+        if not isinstance(certificate["key"], bool):
+            remove(certificate["key"])
+
+    @staticmethod
+    def prepare_request_data(config) -> str:
+        user_data={}
+        
+        user_data['dataSource'] = repr(config['dataSource'])
+        user_data['testSuites'] = config['testSuites']
+        user_data['properties'] = config['properties']
+        user_data['constraints'] = config['constraints']
+        user_data['choices'] = config['choices']
+        
+        user_data = {k: v for k, v in user_data.items() if v is not None}
+        
+        params = {}
+
+        params['method'] = config['method']
+        params['model'] = config['model']
+        params['userData'] = json.dumps(user_data).replace(' ', '').replace('"', '\'')
+        
+        if (config['template'] is not None) and (config['template'] is not TemplateType.RAW):
+            params['template'] = str(config['template'])
+            request_type='requestExport'
+        else:
+            request_type='requestData'
+        
+        request = config['config']['genServer'] + '/testCaseService?'
+        
+        request += 'requestType=' + request_type 
+        request += '&client=python'
+        request += '&request='
+        request += json.dumps(params).replace(' ', '')
+        
+        return request
+
+    @staticmethod
+    def prepare_feedback_address(config) -> str:
+
+        return config['config']['genServer'] + '/streamFeedback?client=python'
+
+    @staticmethod
+    def prepare_feedback_body(config) -> str:
+        body = {}
+
+        body['modelId'] = config['model']
+        body['methodInfo'] = config['method']
+        body['generatorType'] = config['dataSource'].to_feedback_param()
+        body['testSuites'] = config['testSuites']
+        body['constraints'] = config['constraints']
+        body['choices'] = config['choices']
+        body['testSessionId'] = config['testSessionId']
+        body['framework'] = config['framework']
+        body['timestamp'] = config['timestamp']
+        body['generatorOptions'] = RequestHelper.parse_dictionary(config['properties'])
+        body['testSessionLabel'] = config['testSessionLabel']
+        body['custom'] = config['custom']
+        body['testResults'] = config['testResults']
+
+        body = {k: v for k, v in body.items() if v is not None}
+
+        return json.dumps(body)
+
+    @staticmethod    
+    def parse_dictionary(dictionary):
+
+        if dictionary == None:
+            return None
+
+        parsed = ''
+
+        for key in dictionary:
+            parsed += key + '=' + dictionary[key] + ', '
+
+        parsed = parsed[:-2]
+
+        return parsed
