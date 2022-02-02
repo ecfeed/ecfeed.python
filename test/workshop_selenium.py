@@ -1,19 +1,20 @@
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.select import Select
-import ecfeed
-from ecfeed import TestProvider, DataSource, TemplateType
+
+import sys
+sys.path.append("..")
+
+from test_config import Config
+
 import pytest
 import time
-import json
-import requests
 
 # The driver should be placed in the '/usr/bin/' directory.
 
 # ---------------------------------------------------------
 
-endpoint = "http://www.workshop-2020-march.ecfeed.com?mode=error"
+endpoint = "http://www.workshop-2021-december.ecfeed.com?mode=error"
 
 form = {
     "execute": ["submit"],
@@ -21,8 +22,7 @@ form = {
     "input": [["name", "address", "quantity", "phone", "email"], ["country", "product", "color", "size", "payment", "delivery"]]
 }
 
-ecfeed = TestProvider(model='PZS2-W9NH-FRGZ-LZ4N-VGMR')
-method = 'com.example.test.Demo.typeString'
+test_provider = Config.get_test_provider_workshop()
 
 driver = webdriver.Firefox()
 
@@ -99,7 +99,7 @@ def setup():
     yield driver
     driver.close()
 
-@pytest.mark.parametrize(ecfeed.test_header(method, feedback=True), ecfeed.nwise(method=method, feedback=True))
+@pytest.mark.parametrize(test_provider.test_header(Config.F_WORKSHOP, feedback=True), test_provider.nwise(method=Config.F_WORKSHOP, feedback=True))
 def test_method_random(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle):
 
     response = set_selenium_form(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle)

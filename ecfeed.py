@@ -194,18 +194,19 @@ class TestProvider:
         if (config['config']['url']):
             yield config['config']['request']
             return
-
+        
         config = self.__configuration_update(config, **kwargs)
-
+        
         try:
             response = RequestHelper.process_request_data(config)
-
+            
             for line in response.iter_lines(decode_unicode=True):
+                
                 line = line.decode('utf-8')
-
+                
                 test_case = None
                 raw_type = ((config['template'] is not None) and (config['template'] is not TemplateType.RAW)) or config['config']['rawOutput']
-
+                
                 if raw_type and (config['testSessionId'] is None):
                     yield line
                 elif raw_type:
@@ -217,6 +218,7 @@ class TestProvider:
                     self.__response_parse_method_info(config, test_data)
                     self.__response_parse_method(config, test_data)
                     test_case = self.__response_parse_values(config, test_data)
+                    
                 
                 if test_case is not None:
                     yield self.__response_parse_test_case(line, config, test_case)
@@ -611,16 +613,17 @@ class TestProvider:
         return result
 
     def __cast(self, arg_info):
+
         value = arg_info[0]
         typename = arg_info[1]
 
-        if typename in ['byte, short', 'int', 'long']:
+        if typename in ['byte', 'short', 'int', 'long']:
             return int(value)
         elif typename in ['float', 'double']:
             return float(value)
         elif typename in ['String', 'char']:
             return value
-        elif typename in ['booolean']:
+        elif typename in ['boolean']:
             return value.lower in ['true', '1']
         else:
             i = typename.rfind('.')
