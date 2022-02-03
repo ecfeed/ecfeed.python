@@ -122,7 +122,7 @@ The ecFeed Python module provides connectivity with the ecFeed online test gener
 
 The 'TestProvider' constructor takes one required and three optional arguments.
 
-- *model (required)* - The model ID. It is a 20 digit number (grouped by 4) that can be found in the 'My projects' page at 'ecfeed.com'. It can be also found in the URL of the model editor page. It's value can be changed later using the 'Model' property.
+- *model (required)* - The model ID. The model ID is a 20 digit number (grouped by 4) that can be found in the *My projects* page at ecfeed.com under each model. It is also in an url of the model editor page opened on a model. By default it is `None`.
 - *genserver* - The URL of the ecfeed generator service. By default it is 'gen.ecfeed.com'.
 - *keystore_path* - The path to the keystore downloaded from 'ecfeed.com' webpage ('Settings' -> 'Security'). The keystore contains the user certificate which is needed to authenticate the user at the generator service. By default, the constructor looks for the keystore in \~/.ecfeed/security.p12, except for Windows, where the default path is \~/ecfeed/security.p12.
 - *password* - The password to the keystore. The default value is 'changeit'.
@@ -214,3 +214,61 @@ Returns list of argument types of the method.
 *method_info* - See _method_arg_names_.
 *method_name* - See _method_arg_names_.
 
+## CLI
+
+The generator can also be accessed from the command line, for example:
+
+```bash
+ecfeed --model XXXX-XXXX-XXXX-XXXX-XXXX --method QuickStart.test --cartesian
+```
+
+### Required arguments
+
+These arguments must be always provided when invoking an ecfeed command.
+
+- '*--model MODEL*' - ID of the accessed model.
+- '*--method METHOD*' - Full name of the method used for generation tests. If the model contains only one method with this name, the argument types may be skipped. For example "--method com.test.TestClass.testMethod", or "--method com.test.TestClass.TestMethod(int, String)".
+- '*--pairwise*' - Use pairwise generator. Equal to '*--nwise -n 2*'.
+- '*--nwise*' - Use NWise generator.
+- '*--cartesian*' - Use cartesian generator.
+- '*--random*' - Use random generator.
+- '*--static*' - Fetch pre generated tests from the server.
+
+### Connection arguments 
+
+Arguments related to connection and authorization to ecFeed server. In most cases the default option will be fine.
+
+- '*--keystore KEYSTORE*' - Path of the keystore file. Default is "~/.ecfeed/security.p12".
+- '*--password PASSWORD*' - Password to keystore. Default is "changeit".
+- '*--genserver GENSERVER*' - Address of the ecfeed service. Default is "gen.ecfeed.com".
+
+### NWise generator arguments
+
+These arguments are valid only with the NWise generator.
+
+- '*-n*' N - n in nwise.
+
+### Random generator arguments
+
+These arguments are valid only with the random generator.
+
+- '*--length LENGTH*' -  Number of test cases to generate.
+- '*--duplicates*' - If used, the same test can appear more than once in the generated suite.
+- '*--adaptive*' - If used, the generator will try to generate tests that are furthest possible from already generated once (in Hamming distance).
+
+### Static data arguments
+
+These arguments are valid only with the '--static' option.
+
+- '*--suites SUITES*' - list of test suites that will be fetched from the ecFeed service. If skipped, all test suites will be fetched.
+
+### Other optional arguments
+
+These arguments are valid with all or only some data sources.
+
+- '*--template {CSV,XML,Gherkin,JSON}*' - Format for generated data. If not used, the data will be generated in CSV format.
+- '*--choices CHOICES*' - Map of choices used for generation, for example {'arg1':['c1', 'c2'], 'arg2':['c3', 'abs:c4']}. Skipped arguments will use all defined choices. This argument is ignored for static generator.
+- '*--constraints CONSTRAINTS*' - List of constraints used for generation, for example ['constraint1', 'constraint2']. If skipped, all constraints will be used. This argument is ignored for static generator.
+- '*--coverage COVERAGE*' - Requested coverage in percent. The generator will stop after the requested percent of n-tuples will be covered. Valid for pairwise, nwise and cartesian generators.
+- '*--output OUTPUT, -o OUTPUT*' - Output file. If omitted, the standard output will be used.
+- '*--url*' - Show the endpoint URL instead of generating test cases.
