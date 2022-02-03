@@ -6,8 +6,6 @@ import tempfile
 
 import json
 from enum import Enum
-import sys
-import time
 
 import importlib
 
@@ -129,6 +127,14 @@ class TestProvider:
         self.keystore_path = path.expanduser(keystore_path)
         self.password = password    
 
+    def get_model(self): return self.model
+    
+    def get_genserver(self): return self.genserver
+    
+    def get_keystore_password(self): return self.password
+    
+    def get_keystore_path(self): return self.keystore_path
+    
     def generate(self, **kwargs):
         """Generic call to ecfeed generator service
 
@@ -226,6 +232,19 @@ class TestProvider:
         except:
             RequestHelper.certificate_remove(config)
 
+    def validate(self):
+         
+        config = self.__configuration_init_validation()
+        
+        try:
+            response = RequestHelper.process_request_validation(config)
+            
+            for line in response.iter_lines(decode_unicode=True):
+               print(line)
+
+        except:
+            RequestHelper.certificate_remove(config)
+            
     def __configuration_init(self, **kwargs):
 
         config = {
@@ -248,6 +267,21 @@ class TestProvider:
 
         return config
 
+    def __configuration_init_validation(self):
+        
+        config = {
+            'config' : {
+                'genServer' : self.genserver,
+                'certificate' : RequestHelper.certificate_load(self.keystore_path, self.password)
+            },
+            'framework' : 'Python',
+            'timestamp' : None
+        }
+
+        config['config']['request'] = RequestHelper.prepare_request_validation(config)
+
+        return config
+    
     def __configuration_update(self, config, **kwargs):
 
         update = {
@@ -677,6 +711,11 @@ class RequestHelper:
         return status
 
     @staticmethod
+    def process_request_validation(config):
+        
+        return RequestHelper.process_request(RequestHelper.prepare_request_validation(config), config)
+    
+    @staticmethod
     def process_request(request, config, body=''):
         response = ''
 
@@ -734,7 +773,7 @@ class RequestHelper:
             remove(certificate["client"])
         if not isinstance(certificate["key"], bool):
             remove(certificate["key"])
-
+    
     @staticmethod
     def prepare_request_data(config) -> str:
         user_data={}
@@ -768,6 +807,14 @@ class RequestHelper:
         
         return request
 
+    @staticmethod
+    def prepare_request_validation(config) -> str:
+        request = config['config']['genServer'] + '/genServiceVersion?'
+        
+        request += '&client=python'
+        
+        return request
+    
     @staticmethod
     def prepare_feedback_address(config) -> str:
 

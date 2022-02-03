@@ -2,7 +2,6 @@ import argparse
 import ecfeed
 from ecfeed import TestProvider, DataSource, TemplateType
 import sys
-import os
 import json
 
 def main():
