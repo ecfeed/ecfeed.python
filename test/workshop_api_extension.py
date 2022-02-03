@@ -1,8 +1,10 @@
-import ecfeed
-from ecfeed import TestProvider, DataSource, TemplateType
+import sys
+sys.path.append("..")
+
+from test_config import Config
+
 import pytest
 import time
-import json
 import requests
 
 # ---------------------------------------------------------
@@ -12,8 +14,7 @@ configuration = {
     "endpoint": "https://api.ecfeed.com/"
 }
 
-ecfeed = TestProvider(model='PZS2-W9NH-FRGZ-LZ4N-VGMR')
-method = 'com.example.test.Demo.typeString'
+test_provider = Config.get_test_provider_workshop()
 
 # ---------------------------------------------------------
 
@@ -60,31 +61,31 @@ def process_response(response, test_handle):
 
 # ---------------------------------------------------------
 
-@pytest.mark.parametrize(ecfeed.test_header(method, feedback=True), ecfeed.random(method=method, feedback=True, length=1))
+@pytest.mark.parametrize(test_provider.test_header(Config.F_WORKSHOP, feedback=True), test_provider.random(method=Config.F_WORKSHOP, feedback=True, length=1))
 def test_method_error_output(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle):
     
     response = process_request("Norway", Name, Address, Product, Color, Size, Quantity, Payment, Delivery, "+48123456789", Email)
     process_response(response, test_handle)
 
-@pytest.mark.parametrize(ecfeed.test_header(method, feedback=True), ecfeed.random(method=method, feedback=True, length=1))
+@pytest.mark.parametrize(test_provider.test_header(Config.F_WORKSHOP, feedback=True), test_provider.random(method=Config.F_WORKSHOP, feedback=True, length=1))
 def test_method_error_input(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle):
 
     response = process_request(Country, Name, Address, Product, "pink", Size, Quantity, Payment, Delivery, Phone, Email)
     process_response(response, test_handle)
 
-@pytest.mark.parametrize(ecfeed.test_header(method, feedback=True), ecfeed.nwise(method=method, feedback=True))
+@pytest.mark.parametrize(test_provider.test_header(Config.F_WORKSHOP, feedback=True), test_provider.nwise(method=Config.F_WORKSHOP, feedback=True))
 def test_method_nwise(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle):
     
     response = process_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email)
     process_response(response, test_handle)
 
-@pytest.mark.parametrize(ecfeed.test_header(method, feedback=True), ecfeed.random(method=method, feedback=True, length=1000))
+@pytest.mark.parametrize(test_provider.test_header(Config.F_WORKSHOP, feedback=True), test_provider.random(method=Config.F_WORKSHOP, feedback=True, length=1000))
 def test_method_random(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle):
     
     response = process_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email)
     process_response(response, test_handle)
 
-@pytest.mark.parametrize(ecfeed.test_header(method, feedback=True), ecfeed.random(method=method, feedback=True, length=1000, constraints='NONE'))
+@pytest.mark.parametrize(test_provider.test_header(Config.F_WORKSHOP, feedback=True), test_provider.random(method=Config.F_WORKSHOP, feedback=True, length=1000, constraints='NONE'))
 def test_method_random_no_constraints(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle):
     
     response = process_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email)
