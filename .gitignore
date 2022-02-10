@@ -14,3 +14,4 @@ ecfeed.egg-info/*
 .vscode/
 *.orig
 geckodriver.log
+dist

@@ -1,70 +1,70 @@
-import sys
-sys.path.append("..")
+# import sys
+# sys.path.append("..")
 
-from test_config import Config
+# from test_config import Config
 
-import pytest
-import time
-import requests
+# import pytest
+# import time
+# import requests
 
-# ---------------------------------------------------------
+# # ---------------------------------------------------------
 
-configuration = {
-    "mode": "error",
-    "endpoint": "https://api.ecfeed.com/"
-}
+# configuration = {
+#     "mode": "error",
+#     "endpoint": "https://api.ecfeed.com/"
+# }
 
-test_provider = Config.get_test_provider_workshop()
+# test_provider = Config.get_test_provider_workshop()
 
-# ---------------------------------------------------------
+# # ---------------------------------------------------------
 
-def send_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email):
+# def send_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email):
 
-    parameters = {
-        "mode": configuration["mode"],
-        "country": Country,
-        "name": Name,
-        "address": Address,
-        "product": Product,
-        "color": Color,
-        "size": Size,
-        "quantity": Quantity,
-        "payment": Payment,
-        "delivery": Delivery,
-        "phone": Phone,
-        "email": Email
-    }
+#     parameters = {
+#         "mode": configuration["mode"],
+#         "country": Country,
+#         "name": Name,
+#         "address": Address,
+#         "product": Product,
+#         "color": Color,
+#         "size": Size,
+#         "quantity": Quantity,
+#         "payment": Payment,
+#         "delivery": Delivery,
+#         "phone": Phone,
+#         "email": Email
+#     }
 
-    return requests.post(configuration["endpoint"], params=parameters)
+#     return requests.post(configuration["endpoint"], params=parameters)
 
-def process_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email):
+# def process_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email):
     
-    timeStart = time.time()
-    response = send_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email)
-    timeEnd = time.time()
+#     timeStart = time.time()
+#     response = send_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email)
+#     timeEnd = time.time()
 
-    return {
-        "response": response,
-        "time": int(1000 * (timeEnd - timeStart)),
-        "error": {
-            "input": response.json()['errorInput'],
-            "output": response.json()['errorOutput']
-        }
-    }
+#     return {
+#         "response": response,
+#         "time": int(1000 * (timeEnd - timeStart)),
+#         "error": {
+#             "input": response.json()['errorInput'],
+#             "output": response.json()['errorOutput']
+#         }
+#     }
 
-def process_response(response, test_handle):
+# def process_response(response, test_handle):
     
-    assert len(response["error"]["input"]) == 0, test_handle.add_feedback(False, duration=response["time"], comment=''.join('- ' + e + ' ' for e in response["error"]["input"]), custom={'Error type': 'Input'})
-    assert len(response["error"]["output"]) == 0, test_handle.add_feedback(False, duration=response["time"], comment=''.join('- ' + e + ' ' for e in response["error"]["output"]), custom={'Error type': 'Output'})
+#     assert len(response["error"]["input"]) == 0, test_handle.add_feedback(False, duration=response["time"], comment=''.join('- ' + e + ' ' for e in response["error"]["input"]), custom={'Error type': 'Input'})
+#     assert len(response["error"]["output"]) == 0, test_handle.add_feedback(False, duration=response["time"], comment=''.join('- ' + e + ' ' for e in response["error"]["output"]), custom={'Error type': 'Output'})
     
-    test_handle.add_feedback(True, duration=response["time"])
+#     test_handle.add_feedback(True, duration=response["time"])
 
-# ---------------------------------------------------------
+# # ---------------------------------------------------------
 
-@pytest.mark.parametrize(test_provider.test_header(Config.F_WORKSHOP, feedback=True), test_provider.nwise(method=Config.F_WORKSHOP, feedback=True))
-def test_method_nwise(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle):
+# @pytest.mark.parametrize(test_provider.test_header(Config.F_WORKSHOP, feedback=True), test_provider.nwise(method=Config.F_WORKSHOP, feedback=True))
+# def test_method_nwise(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email, test_handle):
 
-    response = process_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email)
-    process_response(response, test_handle)
+#     response = process_request(Country, Name, Address, Product, Color, Size, Quantity, Payment, Delivery, Phone, Email)
+#     process_response(response, test_handle)
 
     
