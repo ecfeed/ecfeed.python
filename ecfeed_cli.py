@@ -83,7 +83,7 @@ def parse_arguments():
     if 'suites' in args and args['suites'] != None:
         args['suites'] = json.loads(args['suites'].replace('\'', '"'))
 
-    args['template'] = ecfeed.parse_template(args['template'])
+    args['template'] = ecfeed.TemplateType.parse_template(args['template'])
 
     return args
 
